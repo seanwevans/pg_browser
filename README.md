@@ -223,7 +223,7 @@ SQL files into a release archive when tags matching `v*` are created.
 
 ## License
 
-TBD. (Suggest: permissive OSS like MIT/Apache-2.0.)
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 
