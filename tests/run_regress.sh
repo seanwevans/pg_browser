@@ -4,6 +4,13 @@ set -euo pipefail
 # Run regression tests using pg_regress. Requires a running PostgreSQL server
 # accessible via local Unix socket and the `postgres` superuser.
 
+if ! command -v pg_config >/dev/null; then
+  echo "pg_config not found. Install PostgreSQL development packages to run tests." >&2
+  exit 1
+fi
+
+PG_REGRESS="$(pg_config --bindir)/pg_regress"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 OUTPUT_DIR="$SCRIPT_DIR/results"
 mkdir -p "$OUTPUT_DIR"

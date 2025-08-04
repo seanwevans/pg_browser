@@ -23,6 +23,10 @@ AS $$
 DECLARE
     sid UUID;
 BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty';
+    END IF;
+
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
     RETURNING id INTO sid;
@@ -33,6 +37,9 @@ BEGIN
     RETURN sid;
 END;
 $$;
+
+COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
+    'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
 
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
@@ -59,3 +66,6 @@ BEGIN
     VALUES (p_session_id, next_n, v_url);
 END;
 $$;
+
+COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
+    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';

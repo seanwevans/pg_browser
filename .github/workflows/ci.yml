@@ -36,3 +36,12 @@ jobs:
           for file in sql/00_install.sql sql/60_pgb_session.sql; do
             psql -h localhost -U postgres -d pg_browser_test -f "$file"
           done
+      - name: Run tests
+        run: |
+          set +e
+          tests/run.sh
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            echo "Tests failed with exit status $status"
+            exit $status
+          fi
