@@ -37,6 +37,9 @@ BEGIN
 END;
 $$;
 
+COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
+    'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
+
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -62,6 +65,9 @@ BEGIN
     VALUES (p_session_id, next_n, v_url);
 END;
 $$;
+
+COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
+    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
 
 
 -- Open a new session and capture the ID
