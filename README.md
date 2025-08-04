@@ -187,6 +187,14 @@ docs/
 
 ---
 
+## Testing
+
+A minimal regression harness lives under `test/`. Run `test/run.sh` to execute
+the pg_regress test suite (requires a local PostgreSQL server accessible as the
+`postgres` superuser).
+
+---
+
 ## Contributing
 
 - File issues for design/API changes before implementation.
