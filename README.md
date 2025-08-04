@@ -118,14 +118,20 @@ SELECT pgb_session.open('pgb://local/demo_chat') AS session_id;
 -- → returns UUID
 ```
 
-2) **Render the initial frame (ASCII)**
+2) **Reload the current page (optional)**
+
+```sql
+SELECT pgb_session.reload(:session_id);
+```
+
+3) **Render the initial frame (ASCII)**
 
 ```sql
 SELECT line_no, text
 FROM pgb_view.render_ascii(:session_id);  -- rows of text representing the UI
 ```
 
-3) **Type a message and click Send**
+4) **Type a message and click Send**
 
 ```sql
 -- User types into input#msg
@@ -135,7 +141,7 @@ SELECT pgb_events.input(:session_id, 'msg'::uuid, 'hello');
 SELECT pgb_events.click(:session_id, 'send_button'::uuid);
 ```
 
-4) **Receive updated frame**
+5) **Receive updated frame**
 
 ```sql
 -- Client listens for NOTIFY 'pgb_frame_ready,<session_id>'
@@ -143,7 +149,7 @@ SELECT pgb_events.click(:session_id, 'send_button'::uuid);
 SELECT line_no, text FROM pgb_view.render_ascii(:session_id);
 ```
 
-5) **Replay (debugging)**
+6) **Replay (debugging)**
 
 ```sql
 -- Rewind to a prior timestamp and re-render:
