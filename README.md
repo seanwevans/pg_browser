@@ -199,6 +199,13 @@ docs/
 
 ---
 
+## CI/CD
+
+Automated GitHub Actions run PostgreSQL schema checks on every push and package
+SQL files into a release archive when tags matching `v*` are created.
+
+---
+
 ## License
 
 TBD. (Suggest: permissive OSS like MIT/Apache-2.0.)

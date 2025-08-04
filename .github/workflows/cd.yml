@@ -1,0 +1,20 @@
+---
+name: CD
+
+'on':
+  push:
+    tags: ['v*']
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create archive
+        run: tar czf pg_browser_sql.tar.gz sql
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: pg_browser_sql.tar.gz
+          draft: false
+          prerelease: false
