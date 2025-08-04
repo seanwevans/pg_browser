@@ -91,8 +91,6 @@ SELECT :'sid' IS NOT NULL AS opened;
 -- Reload the session
 SELECT pgb_session.reload(:'sid');
 
- reload
-
  reload 
 
 --------

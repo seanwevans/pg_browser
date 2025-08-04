@@ -1,0 +1,11 @@
+-- Attempt to reload a non-existent session; should raise an error
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.reload(gen_random_uuid());
+        RAISE EXCEPTION 'reload did not fail';
+    EXCEPTION WHEN others THEN
+        RAISE NOTICE 'error raised as expected';
+    END;
+END;
+$$;
