@@ -61,15 +61,15 @@ $$;
 SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 -- Ensure an ID is returned
 SELECT :'sid' IS NOT NULL AS opened;
- opened
+ opened 
 --------
  t
 (1 row)
 
 -- Reload the session
 SELECT pgb_session.reload(:'sid');
- pgb_session.reload 
----------------------
+ reload 
+--------
  
 (1 row)
 
@@ -86,3 +86,4 @@ SELECT count(*) AS history_count FROM pgb_session.history;
 ---------------
              2
 (1 row)
+
