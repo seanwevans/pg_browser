@@ -23,6 +23,10 @@ AS $$
 DECLARE
     sid UUID;
 BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty';
+    END IF;
+
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
     RETURNING id INTO sid;
