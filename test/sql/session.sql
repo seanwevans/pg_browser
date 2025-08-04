@@ -37,11 +37,44 @@ BEGIN
 END;
 $$;
 
--- Open a new session and ensure an ID is returned
-SELECT pgb_session.open('pgb://local/demo') IS NOT NULL AS opened;
+CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_url TEXT;
+    next_n INT;
+BEGIN
+    SELECT current_url INTO v_url
+    FROM pgb_session.session
+    WHERE id = p_session_id;
+
+    IF v_url IS NULL THEN
+        RAISE EXCEPTION 'session % not found', p_session_id;
+    END IF;
+
+    SELECT COALESCE(max(n), 0) + 1
+    INTO next_n
+    FROM pgb_session.history
+    WHERE session_id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url)
+    VALUES (p_session_id, next_n, v_url);
+END;
+$$;
+
+
+-- Open a new session and capture the ID
+SELECT pgb_session.open('pgb://local/demo') AS sid \gset
+
+-- Ensure an ID is returned
+SELECT :'sid' IS NOT NULL AS opened;
+
+-- Reload the session
+SELECT pgb_session.reload(:'sid');
 
 -- Verify session table has one row
 SELECT count(*) AS session_count FROM pgb_session.session;
 
--- Verify history table has one entry
+-- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
