@@ -16,3 +16,6 @@ SELECT count(*) AS session_count FROM pgb_session.session;
 
 -- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
+
+-- Ensure empty URL raises an exception
+SELECT pgb_session.open('');

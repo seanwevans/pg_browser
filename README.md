@@ -197,8 +197,10 @@ docs/
 
 A minimal regression harness lives under `tests/`. Run `tests/run_regress.sh` to
 execute the pg_regress test suite (requires a local PostgreSQL server
-accessible as the `postgres` superuser). Additional integration tests live in
-the same directory.
+accessible as the `postgres` superuser). The script uses `pg_config` to locate
+`pg_regress`; install the PostgreSQL development package (e.g.,
+`postgresql-server-dev-16` on Debian/Ubuntu) if `pg_config` is not available.
+Additional integration tests live in the same directory.
 
 ---
 
@@ -223,7 +225,7 @@ SQL files into a release archive when tags matching `v*` are created.
 
 ## License
 
-TBD. (Suggest: permissive OSS like MIT/Apache-2.0.)
+Distributed under the MIT License. See [LICENSE](LICENSE) for details.
 
 ---
 

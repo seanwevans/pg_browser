@@ -28,6 +28,10 @@ AS $$
 DECLARE
     sid UUID;
 BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty';
+    END IF;
+
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
     RETURNING id INTO sid;
@@ -38,7 +42,12 @@ BEGIN
     RETURN sid;
 END;
 $$;
+
 CREATE FUNCTION
+
+COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
+    'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
+
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -64,19 +73,28 @@ BEGIN
     VALUES (p_session_id, next_n, v_url);
 END;
 $$;
+
 CREATE FUNCTION
+
+COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
+    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+
 -- Open a new session and capture the ID
 SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 -- Ensure an ID is returned
 SELECT :'sid' IS NOT NULL AS opened;
- opened
+ opened 
 --------
  t
 (1 row)
 
 -- Reload the session
 SELECT pgb_session.reload(:'sid');
+
  reload
+
+ reload 
+
 --------
  
 (1 row)
@@ -94,3 +112,8 @@ SELECT count(*) AS history_count FROM pgb_session.history;
 ---------------
              2
 (1 row)
+
+-- Ensure empty URL raises an exception
+SELECT pgb_session.open('');
+ERROR:  url must not be empty
+CONTEXT:  PL/pgSQL function pgb_session.open(text) line 6 at RAISE
