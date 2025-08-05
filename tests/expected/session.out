@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.session (
 );
 CREATE TABLE IF NOT EXISTS pgb_session.history (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
-    n INT NOT NULL,
+    n BIGINT NOT NULL,
     url TEXT NOT NULL,
     ts TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY(session_id, n)
@@ -52,7 +52,7 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     v_url TEXT;
-    next_n INT;
+    next_n BIGINT;
 BEGIN
     SELECT current_url INTO v_url
     FROM pgb_session.session
