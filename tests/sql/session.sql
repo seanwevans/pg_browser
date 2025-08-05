@@ -21,6 +21,10 @@ SELECT count(*) AS history_count FROM pgb_session.history;
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
 SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 
+-- Accept uppercase URL schemes
+SELECT pgb_session.open('HTTP://example.com') IS NOT NULL AS http_upper_opened;
+SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened;
+
 -- Reject invalid URL scheme
 SELECT pgb_session.open('ftp://example.com');
 
