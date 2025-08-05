@@ -58,7 +58,8 @@ BEGIN
     WHERE id = p_session_id;
 
     IF v_url IS NULL THEN
-        RAISE EXCEPTION 'session % not found', p_session_id;
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
     END IF;
 
     SELECT COALESCE(max(n), 0) + 1
