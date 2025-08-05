@@ -104,6 +104,20 @@ Optional:
 CREATE EXTENSION IF NOT EXISTS http;
 ```
 
+### Upgrade
+
+For installations created before the `pgb_session.history.n` column used
+`BIGINT`, run the upgrade script:
+
+```bash
+psql -d yourdb -f sql/61_pgb_session_history_bigint.sql
+```
+
+This script redefines `pgb_session.reload` by including
+`sql/60_pgb_session_reload.sql`, keeping the function's definition in one
+place. Modify `sql/60_pgb_session_reload.sql` if the function body needs to
+change.
+
 ---
 
 ## Quickstart (design preview)
