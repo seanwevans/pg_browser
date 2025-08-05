@@ -53,4 +53,95 @@ $$;
 COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
     'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
 
+CREATE OR REPLACE FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_n BIGINT;
+BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty';
+    END IF;
+
+    IF p_url !~* '^(pgb|https?)://' THEN
+        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
+    END IF;
+
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
+    SELECT COALESCE(max(n), 0) + 1
+    INTO next_n
+    FROM pgb_session.history
+    WHERE session_id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url)
+    VALUES (p_session_id, next_n, p_url);
+END;
+$$;
+
+COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
+    'Navigate to a new URL. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
+
 \ir 60_pgb_session_reload.sql
+
+CREATE OR REPLACE FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_state JSONB;
+    v_url TEXT;
+    v_snap_ts TIMESTAMPTZ;
+BEGIN
+    SELECT state, current_url, ts
+    INTO v_state, v_url, v_snap_ts
+    FROM pgb_session.snapshot
+    WHERE session_id = p_session_id
+      AND ts <= p_ts
+    ORDER BY ts DESC
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'snapshot not found for session % at %', p_session_id, p_ts
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
+    UPDATE pgb_session.session
+    SET state = v_state,
+        current_url = v_url
+    WHERE id = p_session_id;
+
+    DELETE FROM pgb_session.history
+    WHERE session_id = p_session_id
+      AND ts > v_snap_ts;
+END;
+$$;
+
+COMMENT ON FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ) IS
+    'Rewind a session to a snapshot at or before p_ts. Parameters: p_session_id - session ID; p_ts - target timestamp. Example usage: SELECT pgb_session.replay(:session_id, ''2025-08-04T15:30:00Z''::timestamptz); Returns: void.';
+
+CREATE OR REPLACE FUNCTION pgb_session.close(p_session_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    DELETE FROM pgb_session.session
+    WHERE id = p_session_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION pgb_session.close(p_session_id UUID) IS
+    'Close a session and remove all associated data. Parameters: p_session_id - session ID. Returns: void.';
