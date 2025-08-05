@@ -42,10 +42,15 @@ SELECT * FROM dblink_get_result('c2') AS t(result text);
 (1 row)
 
 -- Verify history sequence numbers are unique and sequential
-SELECT array_agg(n ORDER BY n) AS ns FROM pgb_session.history WHERE session_id = :'sid';
+SELECT array_agg(n - min_n ORDER BY n) AS ns
+FROM (
+    SELECT n, min(n) OVER () AS min_n
+    FROM pgb_session.history
+    WHERE session_id = :'sid'
+) s;
    ns    
 ---------
- {1,2,3}
+ {0,1,2}
 (1 row)
 
 SELECT dblink_disconnect('c1');
