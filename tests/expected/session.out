@@ -44,6 +44,41 @@ END;
 $$;
 COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
     'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
+CREATE OR REPLACE FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_n BIGINT;
+BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty';
+    END IF;
+
+    IF p_url !~* '^(pgb|https?)://' THEN
+        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
+    END IF;
+
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
+    SELECT COALESCE(max(n), 0) + 1
+    INTO next_n
+    FROM pgb_session.history
+    WHERE session_id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url)
+    VALUES (p_session_id, next_n, p_url);
+END;
+$$;
+COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
+    'Navigate to a new URL. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -105,6 +140,38 @@ SELECT count(*) AS history_count FROM pgb_session.history;
              2
 (1 row)
 
+-- Navigate to new URLs within the session
+SELECT pgb_session.navigate(:'sid', 'http://example.com');
+ navigate 
+----------
+ 
+(1 row)
+
+SELECT pgb_session.navigate(:'sid', 'https://example.org');
+ navigate 
+----------
+ 
+(1 row)
+
+-- Verify current_url updated
+SELECT current_url = 'https://example.org' AS navigated
+FROM pgb_session.session WHERE id = :'sid';
+ navigated 
+-----------
+ t
+(1 row)
+
+-- Verify history table has four entries for the session
+SELECT count(*) AS history_count_after_nav FROM pgb_session.history WHERE session_id = :'sid';
+ history_count_after_nav 
+-------------------------
+                       4
+(1 row)
+
+-- Reject invalid URL scheme on navigate
+SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
+ERROR:  unsupported URL scheme: ftp://example.com
+CONTEXT:  PL/pgSQL function pgb_session.navigate(uuid,text) line 10 at RAISE
 -- Accept valid URL schemes
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
  http_opened 
