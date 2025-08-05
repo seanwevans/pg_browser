@@ -28,4 +28,19 @@ if [[ "$COUNT" -ne 1 ]]; then
   exit 1
 fi
 
+# Close the session
+sudo -u postgres psql -d "$DB" -v ON_ERROR_STOP=1 -c "SELECT pgb_session.close('$SESSION_ID');" >/dev/null
+
+COUNT=$(sudo -u postgres psql -d "$DB" -t -A -c "SELECT count(*) FROM pgb_session.session WHERE id = '$SESSION_ID';")
+if [[ "$COUNT" -ne 0 ]]; then
+  echo "session row not deleted"
+  exit 1
+fi
+
+COUNT=$(sudo -u postgres psql -d "$DB" -t -A -c "SELECT count(*) FROM pgb_session.history WHERE session_id = '$SESSION_ID';")
+if [[ "$COUNT" -ne 0 ]]; then
+  echo "history rows not deleted"
+  exit 1
+fi
+
 echo "session_open integration test passed"
