@@ -45,6 +45,43 @@ $$;
 COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
     'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
 
+CREATE OR REPLACE FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    next_n BIGINT;
+BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty';
+    END IF;
+
+    IF p_url !~* '^(pgb|https?)://' THEN
+        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
+    END IF;
+
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
+    SELECT COALESCE(max(n), 0) + 1
+    INTO next_n
+    FROM pgb_session.history
+    WHERE session_id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url)
+    VALUES (p_session_id, next_n, p_url);
+END;
+$$;
+
+COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
+    'Navigate to a new URL. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
+
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
