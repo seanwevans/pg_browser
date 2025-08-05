@@ -36,28 +36,5 @@ $$;
 
 COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
     'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
-
-CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
-RETURNS VOID
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    v_url TEXT;
-BEGIN
-    SELECT current_url INTO v_url
-    FROM pgb_session.session
-    WHERE id = p_session_id
-    FOR UPDATE;
-
-    IF v_url IS NULL THEN
-        RAISE EXCEPTION 'session % not found', p_session_id
-            USING ERRCODE = 'PGBSN';
-    END IF;
-
-    INSERT INTO pgb_session.history(session_id, url)
-    VALUES (p_session_id, v_url);
-END;
-$$;
-
-COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
-    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+    
+\ir 60_pgb_session_reload.sql
