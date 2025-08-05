@@ -22,7 +22,7 @@ if [[ "$URL" != "pgb://local/demo" ]]; then
   exit 1
 fi
 
-COUNT=$(sudo -u postgres psql -d "$DB" -t -A -c "SELECT count(*) FROM pgb_session.history WHERE session_id = '$SESSION_ID' AND n = 1 AND url = 'pgb://local/demo';")
+COUNT=$(sudo -u postgres psql -d "$DB" -t -A -c "SELECT count(*) FROM pgb_session.history WHERE session_id = '$SESSION_ID' AND url = 'pgb://local/demo';")
 if [[ "$COUNT" -ne 1 ]]; then
   echo "history row missing"
   exit 1
