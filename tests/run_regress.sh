@@ -16,4 +16,4 @@ OUTPUT_DIR="$SCRIPT_DIR/results"
 mkdir -p "$OUTPUT_DIR"
 chown postgres:postgres "$OUTPUT_DIR"
 
-su postgres -c "$PG_REGRESS --inputdir=$SCRIPT_DIR --outputdir=$OUTPUT_DIR --expecteddir=$SCRIPT_DIR/expected session reload_invalid"
+su postgres -c "cd $SCRIPT_DIR/sql && /usr/lib/postgresql/16/lib/pgxs/src/test/regress/pg_regress --inputdir=$SCRIPT_DIR --outputdir=$OUTPUT_DIR --expecteddir=$SCRIPT_DIR/expected session reload_invalid reload_concurrent"

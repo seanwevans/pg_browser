@@ -55,7 +55,8 @@ DECLARE
 BEGIN
     SELECT current_url INTO v_url
     FROM pgb_session.session
-    WHERE id = p_session_id;
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF v_url IS NULL THEN
         RAISE EXCEPTION 'session % not found', p_session_id
