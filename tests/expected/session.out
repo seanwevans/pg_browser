@@ -1,10 +1,8 @@
 -- Install core dependencies
 \ir ../../sql/00_install.sql
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
-CREATE EXTENSION
 \ir ../../sql/60_pgb_session.sql
 CREATE SCHEMA IF NOT EXISTS pgb_session;
-CREATE SCHEMA
 CREATE TABLE IF NOT EXISTS pgb_session.session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -12,7 +10,6 @@ CREATE TABLE IF NOT EXISTS pgb_session.session (
     state JSONB NOT NULL DEFAULT '{}'::jsonb,
     focus UUID
 );
-CREATE TABLE
 CREATE TABLE IF NOT EXISTS pgb_session.history (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
     n INT NOT NULL,
@@ -20,7 +17,6 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
     ts TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY(session_id, n)
 );
-CREATE TABLE
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -42,12 +38,8 @@ BEGIN
     RETURN sid;
 END;
 $$;
-
-CREATE FUNCTION
-
 COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
     'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
-
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -58,7 +50,8 @@ DECLARE
 BEGIN
     SELECT current_url INTO v_url
     FROM pgb_session.session
-    WHERE id = p_session_id;
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF v_url IS NULL THEN
         RAISE EXCEPTION 'session % not found', p_session_id;
@@ -73,12 +66,8 @@ BEGIN
     VALUES (p_session_id, next_n, v_url);
 END;
 $$;
-
-CREATE FUNCTION
-
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
     'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
-
 -- Open a new session and capture the ID
 SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 -- Ensure an ID is returned
@@ -90,23 +79,21 @@ SELECT :'sid' IS NOT NULL AS opened;
 
 -- Reload the session
 SELECT pgb_session.reload(:'sid');
-
  reload 
-
 --------
  
 (1 row)
 
 -- Verify session table has one row
 SELECT count(*) AS session_count FROM pgb_session.session;
- session_count
+ session_count 
 ---------------
              1
 (1 row)
 
 -- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
- history_count
+ history_count 
 ---------------
              2
 (1 row)

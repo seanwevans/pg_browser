@@ -1,0 +1,62 @@
+-- Test concurrent reloads to ensure unique history entries
+CREATE EXTENSION IF NOT EXISTS dblink;
+-- Open a new session and capture the ID
+SELECT pgb_session.open('pgb://local/demo') AS sid \gset
+-- Establish two connections for concurrent reloads
+SELECT dblink_connect('c1', 'dbname=' || current_database());
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+SELECT dblink_connect('c2', 'dbname=' || current_database());
+ dblink_connect 
+----------------
+ OK
+(1 row)
+
+-- Launch reloads concurrently
+SELECT dblink_send_query('c1', format('SELECT pgb_session.reload(''%s'')', :'sid'));
+ dblink_send_query 
+-------------------
+                 1
+(1 row)
+
+SELECT dblink_send_query('c2', format('SELECT pgb_session.reload(''%s'')', :'sid'));
+ dblink_send_query 
+-------------------
+                 1
+(1 row)
+
+-- Wait for both reloads to complete
+SELECT * FROM dblink_get_result('c1') AS t(result text);
+ result 
+--------
+ 
+(1 row)
+
+SELECT * FROM dblink_get_result('c2') AS t(result text);
+ result 
+--------
+ 
+(1 row)
+
+-- Verify history sequence numbers are unique and sequential
+SELECT array_agg(n ORDER BY n) AS ns FROM pgb_session.history WHERE session_id = :'sid';
+   ns    
+---------
+ {1,2,3}
+(1 row)
+
+SELECT dblink_disconnect('c1');
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
+SELECT dblink_disconnect('c2');
+ dblink_disconnect 
+-------------------
+ OK
+(1 row)
+
