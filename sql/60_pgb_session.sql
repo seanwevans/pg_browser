@@ -16,6 +16,14 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
     PRIMARY KEY(session_id, n)
 );
 
+CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
+    session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
+    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    state JSONB NOT NULL,
+    current_url TEXT NOT NULL,
+    PRIMARY KEY(session_id, ts)
+);
+
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -75,3 +83,39 @@ $$;
 
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
     'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+
+CREATE OR REPLACE FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_state JSONB;
+    v_url TEXT;
+    v_snap_ts TIMESTAMPTZ;
+BEGIN
+    SELECT state, current_url, ts
+    INTO v_state, v_url, v_snap_ts
+    FROM pgb_session.snapshot
+    WHERE session_id = p_session_id
+      AND ts <= p_ts
+    ORDER BY ts DESC
+    LIMIT 1;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'snapshot not found for session % at %', p_session_id, p_ts
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
+    UPDATE pgb_session.session
+    SET state = v_state,
+        current_url = v_url
+    WHERE id = p_session_id;
+
+    DELETE FROM pgb_session.history
+    WHERE session_id = p_session_id
+      AND ts > v_snap_ts;
+END;
+$$;
+
+COMMENT ON FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ) IS
+    'Rewind a session to a snapshot at or before p_ts. Parameters: p_session_id - session ID; p_ts - target timestamp. Example usage: SELECT pgb_session.replay(:session_id, ''2025-08-04T15:30:00Z''::timestamptz); Returns: void.';

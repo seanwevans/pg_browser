@@ -131,70 +131,54 @@ SET datestyle TO ISO, YMD;
 SET
 -- Open a new session and capture the ID
 SELECT pgb_session.open('pgb://local/demo') AS sid \gset
--- Ensure an ID is returned
-SELECT :'sid' IS NOT NULL AS opened;
- opened 
---------
- t
+-- Snapshot current state and capture timestamp
+INSERT INTO pgb_session.snapshot(session_id, ts, state, current_url)
+SELECT :'sid', now(), state, current_url
+FROM pgb_session.session WHERE id = :'sid'
+RETURNING ts AS snap_ts \gset
+INSERT 0 1
+-- Mutate session and history
+UPDATE pgb_session.session SET current_url = 'pgb://local/other', state = '{"foo":"bar"}' WHERE id = :'sid';
+UPDATE 1
+INSERT INTO pgb_session.history(session_id, n, url)
+VALUES (:'sid', 2, 'pgb://local/other');
+INSERT 0 1
+-- Verify state before replay
+SELECT current_url, state FROM pgb_session.session WHERE id = :'sid';
+    current_url    |     state      
+-------------------+----------------
+ pgb://local/other | {"foo": "bar"}
 (1 row)
 
--- Reload the session
-SELECT pgb_session.reload(:'sid');
- reload 
+SELECT count(*) AS history_count_before FROM pgb_session.history WHERE session_id = :'sid';
+ history_count_before 
+----------------------
+                    2
+(1 row)
+
+-- Replay to snapshot timestamp
+SELECT pgb_session.replay(:'sid', :'snap_ts');
+ replay 
 --------
  
 (1 row)
 
--- Verify session table has one row
-SELECT count(*) AS session_count FROM pgb_session.session;
- session_count 
----------------
-             1
+-- Verify restored state and history
+SELECT current_url, state FROM pgb_session.session WHERE id = :'sid';
+   current_url    | state 
+------------------+-------
+ pgb://local/demo | {}
 (1 row)
 
--- Verify history table has two entries
-SELECT count(*) AS history_count FROM pgb_session.history;
- history_count 
----------------
-             2
+SELECT count(*) AS history_count_after FROM pgb_session.history WHERE session_id = :'sid';
+ history_count_after 
+---------------------
+                   1
 (1 row)
 
--- Accept valid URL schemes
-SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
- http_opened 
--------------
- t
+SELECT url FROM pgb_session.history WHERE session_id = :'sid' ORDER BY n;
+       url        
+------------------
+ pgb://local/demo
 (1 row)
 
-SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
- https_opened 
---------------
- t
-(1 row)
-
--- Accept uppercase URL schemes
-SELECT pgb_session.open('HTTP://example.com') IS NOT NULL AS http_upper_opened;
- http_upper_opened 
--------------------
- t
-(1 row)
-
-SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened;
- https_upper_opened 
---------------------
- t
-(1 row)
-
--- Reject invalid URL scheme
-SELECT pgb_session.open('ftp://example.com');
-psql:tests/sql/session.sql:32: ERROR:  unsupported URL scheme: ftp://example.com
-CONTEXT:  PL/pgSQL function pgb_session.open(text) line 10 at RAISE
--- Reject invalid URL scheme on direct insert
-INSERT INTO pgb_session.session(id, created_at, current_url)
-VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
-psql:tests/sql/session.sql:36: ERROR:  new row for relation "session" violates check constraint "session_current_url_check"
-DETAIL:  Failing row contains (00000000-0000-0000-0000-000000000000, 2000-01-01 00:00:00+00, ftp://example.com, {}, null).
--- Ensure empty URL raises an exception
-SELECT pgb_session.open('');
-psql:tests/sql/session.sql:39: ERROR:  url must not be empty
-CONTEXT:  PL/pgSQL function pgb_session.open(text) line 6 at RAISE
