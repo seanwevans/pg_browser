@@ -27,6 +27,10 @@ BEGIN
         RAISE EXCEPTION 'url must not be empty';
     END IF;
 
+    IF p_url !~ '^(pgb|https?)://' THEN
+        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
+    END IF;
+
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
     RETURNING id INTO sid;
@@ -55,7 +59,8 @@ BEGIN
     FOR UPDATE;
 
     IF v_url IS NULL THEN
-        RAISE EXCEPTION 'session % not found', p_session_id;
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
     END IF;
 
     SELECT COALESCE(max(n), 0) + 1

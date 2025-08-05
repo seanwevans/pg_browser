@@ -4,8 +4,11 @@ BEGIN
     BEGIN
         PERFORM pgb_session.reload(gen_random_uuid());
         RAISE EXCEPTION 'reload did not fail';
-    EXCEPTION WHEN others THEN
-        RAISE NOTICE 'error raised as expected';
+    EXCEPTION
+        WHEN sqlstate 'PGBSN' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
     END;
 END;
 $$;
