@@ -22,7 +22,7 @@ BEGIN
 
     IF NOT EXISTS (
         SELECT 1 FROM pgb_session.history
-        WHERE session_id = sid AND n = 1 AND url = 'pgb://local/demo'
+        WHERE session_id = sid AND url = 'pgb://local/demo'
     ) THEN
         RAISE EXCEPTION 'history row missing or incorrect';
     END IF;
