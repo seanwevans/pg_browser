@@ -26,6 +26,20 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'history row missing or incorrect';
     END IF;
+
+    PERFORM pgb_session.close(sid);
+
+    IF EXISTS (
+        SELECT 1 FROM pgb_session.session WHERE id = sid
+    ) THEN
+        RAISE EXCEPTION 'session row not deleted';
+    END IF;
+
+    IF EXISTS (
+        SELECT 1 FROM pgb_session.history WHERE session_id = sid
+    ) THEN
+        RAISE EXCEPTION 'history rows not deleted';
+    END IF;
 END;
 $$;
 

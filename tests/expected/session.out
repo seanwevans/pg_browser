@@ -73,6 +73,22 @@ END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
     'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+CREATE OR REPLACE FUNCTION pgb_session.close(p_session_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    DELETE FROM pgb_session.session
+    WHERE id = p_session_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+END;
+$$;
+COMMENT ON FUNCTION pgb_session.close(p_session_id UUID) IS
+    'Close and delete a session. Parameters: p_session_id - session ID. Deletes session and history via cascade. Returns: void.';
 SET TIME ZONE 'UTC';
 SET datestyle TO ISO, YMD;
 -- Open a new session and capture the ID
@@ -103,6 +119,26 @@ SELECT count(*) AS history_count FROM pgb_session.history;
  history_count 
 ---------------
              2
+(1 row)
+
+-- Close the session
+SELECT pgb_session.close(:'sid');
+ close 
+-------
+ 
+(1 row)
+
+-- Verify session and history cleared
+SELECT count(*) AS session_count_after_close FROM pgb_session.session;
+ session_count_after_close 
+---------------------------
+                         0
+(1 row)
+
+SELECT count(*) AS history_count_after_close FROM pgb_session.history;
+ history_count_after_close 
+---------------------------
+                         0
 (1 row)
 
 -- Accept valid URL schemes

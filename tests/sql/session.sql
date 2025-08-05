@@ -20,6 +20,13 @@ SELECT count(*) AS session_count FROM pgb_session.session;
 -- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
 
+-- Close the session
+SELECT pgb_session.close(:'sid');
+
+-- Verify session and history cleared
+SELECT count(*) AS session_count_after_close FROM pgb_session.session;
+SELECT count(*) AS history_count_after_close FROM pgb_session.history;
+
 -- Accept valid URL schemes
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
 SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;

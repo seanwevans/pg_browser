@@ -75,3 +75,21 @@ $$;
 
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
     'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+
+CREATE OR REPLACE FUNCTION pgb_session.close(p_session_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    DELETE FROM pgb_session.session
+    WHERE id = p_session_id;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+END;
+$$;
+
+COMMENT ON FUNCTION pgb_session.close(p_session_id UUID) IS
+    'Close and delete a session. Parameters: p_session_id - session ID. Deletes session and history via cascade. Returns: void.';
