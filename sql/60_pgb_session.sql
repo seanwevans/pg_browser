@@ -27,7 +27,7 @@ BEGIN
         RAISE EXCEPTION 'url must not be empty';
     END IF;
 
-    IF p_url !~ '^(pgb|https?)://' THEN
+    IF p_url !~* '^(pgb|https?)://' THEN
         RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
     END IF;
 
