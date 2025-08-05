@@ -20,6 +20,7 @@ SELECT count(*) AS session_count FROM pgb_session.session;
 -- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
 
+
 -- Navigate to new URLs within the session
 SELECT pgb_session.navigate(:'sid', 'http://example.com');
 SELECT pgb_session.navigate(:'sid', 'https://example.org');
@@ -33,6 +34,14 @@ SELECT count(*) AS history_count_after_nav FROM pgb_session.history WHERE sessio
 
 -- Reject invalid URL scheme on navigate
 SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
+
+-- Close the session
+SELECT pgb_session.close(:'sid');
+
+-- Verify session and history cleared
+SELECT count(*) AS session_count_after_close FROM pgb_session.session;
+SELECT count(*) AS history_count_after_close FROM pgb_session.history;
+
 
 -- Accept valid URL schemes
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;

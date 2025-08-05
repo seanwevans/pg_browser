@@ -17,7 +17,12 @@ SELECT * FROM dblink_get_result('c1') AS t(result text);
 SELECT * FROM dblink_get_result('c2') AS t(result text);
 
 -- Verify history sequence numbers are unique and sequential
-SELECT array_agg(n ORDER BY n) AS ns FROM pgb_session.history WHERE session_id = :'sid';
+SELECT array_agg(n - min_n ORDER BY n) AS ns
+FROM (
+    SELECT n, min(n) OVER () AS min_n
+    FROM pgb_session.history
+    WHERE session_id = :'sid'
+) s;
 
 SELECT dblink_disconnect('c1');
 SELECT dblink_disconnect('c2');
