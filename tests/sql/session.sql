@@ -2,6 +2,9 @@
 \ir ../../sql/00_install.sql
 \ir ../../sql/60_pgb_session.sql
 
+SET TIME ZONE 'UTC';
+SET datestyle TO ISO, YMD;
+
 -- Open a new session and capture the ID
 SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 
@@ -23,6 +26,10 @@ SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 
 -- Reject invalid URL scheme
 SELECT pgb_session.open('ftp://example.com');
+
+-- Reject invalid URL scheme on direct insert
+INSERT INTO pgb_session.session(id, created_at, current_url)
+VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
 
 -- Ensure empty URL raises an exception
 SELECT pgb_session.open('');
