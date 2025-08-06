@@ -16,10 +16,17 @@ BEGIN
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    SELECT COALESCE(max(n), 0) + 1
-    INTO next_n
-    FROM pgb_session.history
-    WHERE session_id = p_session_id;
+    SELECT COALESCE(
+            (
+                SELECT n
+                FROM pgb_session.history
+                WHERE session_id = p_session_id
+                ORDER BY n DESC
+                LIMIT 1
+            ),
+            0
+        ) + 1
+    INTO next_n;
 
     INSERT INTO pgb_session.history(session_id, n, url)
     VALUES (p_session_id, next_n, v_url);

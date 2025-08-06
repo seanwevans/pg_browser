@@ -1,0 +1,28 @@
+-- Attempt to replay non-existent session and missing snapshot; should raise distinct errors
+DO $$
+DECLARE
+    sid UUID;
+BEGIN
+    BEGIN
+        PERFORM pgb_session.replay(gen_random_uuid(), clock_timestamp());
+        RAISE EXCEPTION 'replay did not fail for missing session';
+    EXCEPTION
+        WHEN sqlstate 'PGBSN' THEN
+            RAISE NOTICE 'session error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+
+    sid := pgb_session.open('pgb://local/demo');
+    BEGIN
+        PERFORM pgb_session.replay(sid, clock_timestamp());
+        RAISE EXCEPTION 'replay did not fail for missing snapshot';
+    EXCEPTION
+        WHEN sqlstate 'PGBNS' THEN
+            RAISE NOTICE 'snapshot error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+    PERFORM pgb_session.close(sid);
+END;
+$$;
