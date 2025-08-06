@@ -130,6 +130,9 @@ BEGIN
     END IF;
 
 
+END;
+$$;
+
 DO $$
 DECLARE
     sid2 UUID;
