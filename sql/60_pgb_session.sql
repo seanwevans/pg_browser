@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     PRIMARY KEY(session_id, ts)
 );
 
+\ir 60_pgb_session_validate_url.sql
 \ir 60_pgb_session_open.sql
 
 CREATE OR REPLACE FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT)
@@ -33,13 +34,7 @@ AS $$
 DECLARE
     next_n BIGINT;
 BEGIN
-    IF p_url IS NULL OR p_url = '' THEN
-        RAISE EXCEPTION 'url must not be empty';
-    END IF;
-
-    IF p_url !~* '^(pgb|https?)://' THEN
-        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
-    END IF;
+    PERFORM pgb_session.validate_url(p_url);
 
     UPDATE pgb_session.session
     SET current_url = p_url
