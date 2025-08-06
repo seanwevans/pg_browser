@@ -93,6 +93,15 @@ BEGIN
         RAISE EXCEPTION 'history row missing after second navigate';
     END IF;
 
+    IF (
+        SELECT n FROM pgb_session.history
+        WHERE session_id = sid
+        ORDER BY n DESC
+        LIMIT 1
+    ) <> 3 THEN
+        RAISE EXCEPTION 'navigate did not produce sequential numbering';
+    END IF;
+
 
     PERFORM pgb_session.reload(sid);
 
@@ -109,11 +118,23 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'reload did not update history correctly';
     END IF;
-END;
-$$;
+
+
+    IF (
+        SELECT n FROM pgb_session.history
+        WHERE session_id = sid
+        ORDER BY n DESC
+        LIMIT 1
+    ) <> 4 THEN
+        RAISE EXCEPTION 'reload did not produce sequential numbering';
+    END IF;
+
 
 DO $$
+DECLARE
+    sid2 UUID;
 BEGIN
+
     BEGIN
         PERFORM pgb_session.reload(gen_random_uuid());
         RAISE EXCEPTION 'reload did not fail';
@@ -123,6 +144,28 @@ BEGIN
         WHEN others THEN
             RAISE EXCEPTION 'unexpected error: %', SQLERRM;
     END;
+
+    BEGIN
+        PERFORM pgb_session.replay(gen_random_uuid(), clock_timestamp());
+        RAISE EXCEPTION 'replay did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBSN' THEN
+            RAISE NOTICE 'session error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+
+    sid2 := pgb_session.open('pgb://local/tmp');
+    BEGIN
+        PERFORM pgb_session.replay(sid2, clock_timestamp());
+        RAISE EXCEPTION 'replay did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBNS' THEN
+            RAISE NOTICE 'snapshot error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+    PERFORM pgb_session.close(sid2);
 
     PERFORM pgb_session.close(sid);
 
@@ -138,8 +181,7 @@ BEGIN
         RAISE EXCEPTION 'history rows not deleted';
     END IF;
 
-
-
+    
 END;
 $$;
 

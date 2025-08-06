@@ -32,6 +32,12 @@ FROM pgb_session.session WHERE id = :'sid';
 -- Verify history table has four entries for the session
 SELECT count(*) AS history_count_after_nav FROM pgb_session.history WHERE session_id = :'sid';
 
+-- Verify history numbering is sequential
+SELECT (
+    SELECT n FROM pgb_session.history WHERE session_id = :'sid' ORDER BY n DESC LIMIT 1
+) = count(*) AS sequential
+FROM pgb_session.history WHERE session_id = :'sid';
+
 -- Reject invalid URL scheme on navigate
 SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
 
