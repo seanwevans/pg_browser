@@ -37,6 +37,8 @@ jobs:
             psql -h localhost -U postgres -d pg_browser_test -f "$file"
           done
       - name: Run tests
+        env:
+          PGPASSWORD: postgres
         run: |
           set +e
           tests/run.sh
