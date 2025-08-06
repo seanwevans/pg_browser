@@ -101,6 +101,18 @@ DECLARE
     v_url TEXT;
     v_snap_ts TIMESTAMPTZ;
 BEGIN
+    -- Acquire a lock on the session row to ensure consistency for
+    -- subsequent updates and deletes.
+    PERFORM 1
+    FROM pgb_session.session
+    WHERE id = p_session_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
     SELECT state, current_url, ts
     INTO v_state, v_url, v_snap_ts
     FROM pgb_session.snapshot
