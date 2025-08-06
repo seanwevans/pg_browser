@@ -108,7 +108,7 @@ BEGIN
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'snapshot not found for session % at %', p_session_id, p_ts
-            USING ERRCODE = 'PGBSN';
+            USING ERRCODE = 'PGBNS';
     END IF;
 
     UPDATE pgb_session.session
