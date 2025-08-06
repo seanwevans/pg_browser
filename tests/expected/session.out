@@ -24,6 +24,27 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     current_url TEXT NOT NULL,
     PRIMARY KEY(session_id, ts)
 );
+
+\ir 60_pgb_session_validate_url.sql
+CREATE OR REPLACE FUNCTION pgb_session.validate_url(p_url TEXT)
+RETURNS VOID
+
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    IF p_url IS NULL OR p_url = '' THEN
+        RAISE EXCEPTION 'url must not be empty'
+            USING ERRCODE = 'PGBUV';
+    END IF;
+
+    IF p_url !~* '^(pgb|https?)://' THEN
+        RAISE EXCEPTION 'unsupported URL scheme: %', p_url
+            USING ERRCODE = 'PGBUV';
+    END IF;
+END;
+$$;
+COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
+    'Validate a URL ensuring it is not empty and uses an allowed scheme.';
 \ir 60_pgb_session_open.sql
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
@@ -32,13 +53,7 @@ AS $$
 DECLARE
     sid UUID;
 BEGIN
-    IF p_url IS NULL OR p_url = '' THEN
-        RAISE EXCEPTION 'url must not be empty';
-    END IF;
-
-    IF p_url !~* '^(pgb|https?)://' THEN
-        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
-    END IF;
+    PERFORM pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
@@ -59,13 +74,7 @@ AS $$
 DECLARE
     next_n BIGINT;
 BEGIN
-    IF p_url IS NULL OR p_url = '' THEN
-        RAISE EXCEPTION 'url must not be empty';
-    END IF;
-
-    IF p_url !~* '^(pgb|https?)://' THEN
-        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
-    END IF;
+    PERFORM pgb_session.validate_url(p_url);
 
     UPDATE pgb_session.session
     SET current_url = p_url
@@ -266,7 +275,9 @@ FROM pgb_session.history WHERE session_id = :'sid';
 -- Reject invalid URL scheme on navigate
 SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
 ERROR:  unsupported URL scheme: ftp://example.com
-CONTEXT:  PL/pgSQL function pgb_session.navigate(uuid,text) line 10 at RAISE
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 9 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.navigate(uuid,text) line 5 at PERFORM
 -- Close the session
 SELECT pgb_session.close(:'sid');
  close 
@@ -316,7 +327,9 @@ SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened
 -- Reject invalid URL scheme
 SELECT pgb_session.open('ftp://example.com');
 ERROR:  unsupported URL scheme: ftp://example.com
-CONTEXT:  PL/pgSQL function pgb_session.open(text) line 10 at RAISE
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 9 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 5 at PERFORM
 -- Reject invalid URL scheme on direct insert
 INSERT INTO pgb_session.session(id, created_at, current_url)
 VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
@@ -325,4 +338,19 @@ DETAIL:  Failing row contains (00000000-0000-0000-0000-000000000000, 2000-01-01 
 -- Ensure empty URL raises an exception
 SELECT pgb_session.open('');
 ERROR:  url must not be empty
-CONTEXT:  PL/pgSQL function pgb_session.open(text) line 6 at RAISE
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 4 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 5 at PERFORM
+-- Validate URLs directly using helper
+SELECT pgb_session.validate_url('http://example.com');
+ validate_url 
+--------------
+ 
+(1 row)
+
+SELECT pgb_session.validate_url('ftp://example.com');
+ERROR:  unsupported URL scheme: ftp://example.com
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 9 at RAISE
+SELECT pgb_session.validate_url('');
+ERROR:  url must not be empty
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 4 at RAISE

@@ -66,3 +66,8 @@ VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp:/
 
 -- Ensure empty URL raises an exception
 SELECT pgb_session.open('');
+
+-- Validate URLs directly using helper
+SELECT pgb_session.validate_url('http://example.com');
+SELECT pgb_session.validate_url('ftp://example.com');
+SELECT pgb_session.validate_url('');
