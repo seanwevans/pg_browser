@@ -105,7 +105,7 @@ BEGIN
             ORDER BY h.n DESC
             LIMIT 1
         ) h ON true
-        WHERE s.id = sid AND h.n = 2 AND h.url = s.current_url
+        WHERE s.id = sid AND h.n = 4 AND h.url = s.current_url
     ) THEN
         RAISE EXCEPTION 'reload did not update history correctly';
     END IF;
