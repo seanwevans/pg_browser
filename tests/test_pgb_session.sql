@@ -93,6 +93,15 @@ BEGIN
         RAISE EXCEPTION 'history row missing after second navigate';
     END IF;
 
+    IF (
+        SELECT n FROM pgb_session.history
+        WHERE session_id = sid
+        ORDER BY n DESC
+        LIMIT 1
+    ) <> 3 THEN
+        RAISE EXCEPTION 'navigate did not produce sequential numbering';
+    END IF;
+
 
     PERFORM pgb_session.reload(sid);
 
@@ -109,13 +118,23 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'reload did not update history correctly';
     END IF;
-END;
-$$;
+
+
+    IF (
+        SELECT n FROM pgb_session.history
+        WHERE session_id = sid
+        ORDER BY n DESC
+        LIMIT 1
+    ) <> 4 THEN
+        RAISE EXCEPTION 'reload did not produce sequential numbering';
+    END IF;
+
 
 DO $$
 DECLARE
     sid2 UUID;
 BEGIN
+
     BEGIN
         PERFORM pgb_session.reload(gen_random_uuid());
         RAISE EXCEPTION 'reload did not fail';
@@ -162,8 +181,7 @@ BEGIN
         RAISE EXCEPTION 'history rows not deleted';
     END IF;
 
-
-
+    
 END;
 $$;
 
