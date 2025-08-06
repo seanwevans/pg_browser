@@ -36,15 +36,20 @@ DECLARE
 BEGIN
     PERFORM pgb_session.validate_url(p_url);
 
-    UPDATE pgb_session.session
-    SET current_url = p_url
-    WHERE id = p_session_id;
+    -- Acquire a lock on the session row to serialize concurrent
+    -- navigations and ensure next_n uniqueness.
+    PERFORM 1
+    FROM pgb_session.session
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
 
+    -- Recalculate next_n after obtaining the lock to avoid conflicts
+    -- between concurrent calls.
     SELECT COALESCE(
             (
                 SELECT n
@@ -56,6 +61,10 @@ BEGIN
             0
         ) + 1
     INTO next_n;
+
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
 
     INSERT INTO pgb_session.history(session_id, n, url, ts)
     VALUES (p_session_id, next_n, p_url, clock_timestamp());
