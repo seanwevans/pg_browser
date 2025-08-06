@@ -1,0 +1,9 @@
+# Test outputs
+tests/results/
+
+# Archive files
+*.tar.gz
+
+# Script-generated transient files
+*.log
+*.tmp
