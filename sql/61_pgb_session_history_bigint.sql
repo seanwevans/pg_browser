@@ -4,7 +4,12 @@ ALTER TABLE pgb_session.history
 
 SELECT setval(
     pg_get_serial_sequence('pgb_session.history', 'n'),
-    COALESCE((SELECT max(n) FROM pgb_session.history), 0),
+    COALESCE((
+        SELECT n
+        FROM pgb_session.history
+        ORDER BY n DESC
+        LIMIT 1
+    ), 0),
     true
 );
 

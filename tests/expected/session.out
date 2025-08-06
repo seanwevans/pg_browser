@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     current_url TEXT NOT NULL,
     PRIMARY KEY(session_id, ts)
 );
+\ir 60_pgb_session_open.sql
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
 LANGUAGE plpgsql
@@ -75,10 +76,17 @@ BEGIN
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    SELECT COALESCE(max(n), 0) + 1
-    INTO next_n
-    FROM pgb_session.history
-    WHERE session_id = p_session_id;
+    SELECT COALESCE(
+            (
+                SELECT n
+                FROM pgb_session.history
+                WHERE session_id = p_session_id
+                ORDER BY n DESC
+                LIMIT 1
+            ),
+            0
+        ) + 1
+    INTO next_n;
 
     INSERT INTO pgb_session.history(session_id, n, url)
     VALUES (p_session_id, next_n, p_url);
@@ -105,10 +113,17 @@ BEGIN
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    SELECT COALESCE(max(n), 0) + 1
-    INTO next_n
-    FROM pgb_session.history
-    WHERE session_id = p_session_id;
+    SELECT COALESCE(
+            (
+                SELECT n
+                FROM pgb_session.history
+                WHERE session_id = p_session_id
+                ORDER BY n DESC
+                LIMIT 1
+            ),
+            0
+        ) + 1
+    INTO next_n;
 
     INSERT INTO pgb_session.history(session_id, n, url)
     VALUES (p_session_id, next_n, v_url);
@@ -125,6 +140,18 @@ DECLARE
     v_url TEXT;
     v_snap_ts TIMESTAMPTZ;
 BEGIN
+    -- Acquire a lock on the session row to ensure consistency for
+    -- subsequent updates and deletes.
+    PERFORM 1
+    FROM pgb_session.session
+    WHERE id = p_session_id
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'session % not found', p_session_id
+            USING ERRCODE = 'PGBSN';
+    END IF;
+
     SELECT state, current_url, ts
     INTO v_state, v_url, v_snap_ts
     FROM pgb_session.snapshot
@@ -224,6 +251,16 @@ SELECT count(*) AS history_count_after_nav FROM pgb_session.history WHERE sessio
  history_count_after_nav 
 -------------------------
                        4
+(1 row)
+
+-- Verify history numbering is sequential
+SELECT (
+    SELECT n FROM pgb_session.history WHERE session_id = :'sid' ORDER BY n DESC LIMIT 1
+) = count(*) AS sequential
+FROM pgb_session.history WHERE session_id = :'sid';
+ sequential 
+------------
+ t
 (1 row)
 
 -- Reject invalid URL scheme on navigate
