@@ -113,6 +113,8 @@ END;
 $$;
 
 DO $$
+DECLARE
+    sid2 UUID;
 BEGIN
     BEGIN
         PERFORM pgb_session.reload(gen_random_uuid());
@@ -123,6 +125,28 @@ BEGIN
         WHEN others THEN
             RAISE EXCEPTION 'unexpected error: %', SQLERRM;
     END;
+
+    BEGIN
+        PERFORM pgb_session.replay(gen_random_uuid(), clock_timestamp());
+        RAISE EXCEPTION 'replay did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBSN' THEN
+            RAISE NOTICE 'session error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+
+    sid2 := pgb_session.open('pgb://local/tmp');
+    BEGIN
+        PERFORM pgb_session.replay(sid2, clock_timestamp());
+        RAISE EXCEPTION 'replay did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBNS' THEN
+            RAISE NOTICE 'snapshot error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+    PERFORM pgb_session.close(sid2);
 
     PERFORM pgb_session.close(sid);
 
