@@ -8,33 +8,6 @@ SELECT setval(
     true
 );
 
-CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
-RETURNS UUID
-LANGUAGE plpgsql
-AS $$
-DECLARE
-    sid UUID;
-BEGIN
-    IF p_url IS NULL OR p_url = '' THEN
-        RAISE EXCEPTION 'url must not be empty';
-    END IF;
+\ir 60_pgb_session_open.sql
 
-    IF p_url !~* '^(pgb|https?)://' THEN
-        RAISE EXCEPTION 'unsupported URL scheme: %', p_url;
-    END IF;
-
-    INSERT INTO pgb_session.session(current_url)
-    VALUES (p_url)
-    RETURNING id INTO sid;
-
-    INSERT INTO pgb_session.history(session_id, url)
-    VALUES (sid, p_url);
-
-    RETURN sid;
-END;
-$$;
-
-COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
-    'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
-    
 \ir 60_pgb_session_reload.sql
