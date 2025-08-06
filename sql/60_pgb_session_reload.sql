@@ -28,8 +28,8 @@ BEGIN
         ) + 1
     INTO next_n;
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (p_session_id, next_n, v_url);
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, v_url, clock_timestamp());
 END;
 $$;
 

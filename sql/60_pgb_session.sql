@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
     n BIGINT NOT NULL,
     url TEXT NOT NULL,
-    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ts TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY(session_id, n)
 );
 
@@ -57,8 +57,8 @@ BEGIN
         ) + 1
     INTO next_n;
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (p_session_id, next_n, p_url);
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, p_url, clock_timestamp());
 END;
 $$;
 
