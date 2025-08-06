@@ -11,7 +11,7 @@ BEGIN
     WHERE id = p_session_id
     FOR UPDATE;
 
-    IF v_url IS NULL THEN
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
