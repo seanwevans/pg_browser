@@ -14,6 +14,7 @@ BEGIN
     END;
 
     sid := pgb_session.open('pgb://local/demo');
+    DELETE FROM pgb_session.snapshot WHERE session_id = sid;
     BEGIN
         PERFORM pgb_session.replay(sid, clock_timestamp());
         RAISE EXCEPTION 'replay did not fail for missing snapshot';

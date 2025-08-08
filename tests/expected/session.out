@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
     n BIGINT NOT NULL,
     url TEXT NOT NULL,
-    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ts TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY(session_id, n)
 );
 CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
@@ -24,11 +24,9 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     current_url TEXT NOT NULL,
     PRIMARY KEY(session_id, ts)
 );
-
 \ir 60_pgb_session_validate_url.sql
 CREATE OR REPLACE FUNCTION pgb_session.validate_url(p_url TEXT)
 RETURNS VOID
-
 LANGUAGE plpgsql
 AS $$
 BEGIN
@@ -52,12 +50,17 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     sid UUID;
+    session_state JSONB;
+    session_url TEXT;
 BEGIN
     PERFORM pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
-    RETURNING id INTO sid;
+    RETURNING id, state, current_url INTO sid, session_state, session_url;
+
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (sid, session_state, session_url);
 
     INSERT INTO pgb_session.history(session_id, n, url)
     VALUES (sid, 1, p_url);
@@ -76,15 +79,20 @@ DECLARE
 BEGIN
     PERFORM pgb_session.validate_url(p_url);
 
-    UPDATE pgb_session.session
-    SET current_url = p_url
-    WHERE id = p_session_id;
+    -- Acquire a lock on the session row to serialize concurrent
+    -- navigations and ensure next_n uniqueness.
+    PERFORM 1
+    FROM pgb_session.session
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
 
+    -- Recalculate next_n after obtaining the lock to avoid conflicts
+    -- between concurrent calls.
     SELECT COALESCE(
             (
                 SELECT n
@@ -97,8 +105,12 @@ BEGIN
         ) + 1
     INTO next_n;
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (p_session_id, next_n, p_url);
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, p_url, clock_timestamp());
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
@@ -117,7 +129,7 @@ BEGIN
     WHERE id = p_session_id
     FOR UPDATE;
 
-    IF v_url IS NULL THEN
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
@@ -134,8 +146,8 @@ BEGIN
         ) + 1
     INTO next_n;
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (p_session_id, next_n, v_url);
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, v_url, clock_timestamp());
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
@@ -210,6 +222,21 @@ SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 SELECT :'sid' IS NOT NULL AS opened;
  opened 
 --------
+ t
+(1 row)
+
+-- Verify snapshot inserted with initial state and URL
+SELECT count(*) = 1 AS snapshot_created
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_created 
+------------------
+ t
+(1 row)
+
+SELECT state = '{}'::jsonb AND current_url = 'pgb://local/demo' AS snapshot_matches
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_matches 
+------------------
  t
 (1 row)
 
@@ -329,7 +356,7 @@ SELECT pgb_session.open('ftp://example.com');
 ERROR:  unsupported URL scheme: ftp://example.com
 CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 9 at RAISE
 SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 5 at PERFORM
+PL/pgSQL function pgb_session.open(text) line 7 at PERFORM
 -- Reject invalid URL scheme on direct insert
 INSERT INTO pgb_session.session(id, created_at, current_url)
 VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
@@ -340,7 +367,7 @@ SELECT pgb_session.open('');
 ERROR:  url must not be empty
 CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 4 at RAISE
 SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 5 at PERFORM
+PL/pgSQL function pgb_session.open(text) line 7 at PERFORM
 -- Validate URLs directly using helper
 SELECT pgb_session.validate_url('http://example.com');
  validate_url 
