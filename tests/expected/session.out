@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
     n BIGINT NOT NULL,
     url TEXT NOT NULL,
-    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ts TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     PRIMARY KEY(session_id, n)
 );
 CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
@@ -24,11 +24,9 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     current_url TEXT NOT NULL,
     PRIMARY KEY(session_id, ts)
 );
-
 \ir 60_pgb_session_validate_url.sql
 CREATE OR REPLACE FUNCTION pgb_session.validate_url(p_url TEXT)
 RETURNS VOID
-
 LANGUAGE plpgsql
 AS $$
 BEGIN
@@ -76,15 +74,20 @@ DECLARE
 BEGIN
     PERFORM pgb_session.validate_url(p_url);
 
-    UPDATE pgb_session.session
-    SET current_url = p_url
-    WHERE id = p_session_id;
+    -- Acquire a lock on the session row to serialize concurrent
+    -- navigations and ensure next_n uniqueness.
+    PERFORM 1
+    FROM pgb_session.session
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
 
+    -- Recalculate next_n after obtaining the lock to avoid conflicts
+    -- between concurrent calls.
     SELECT COALESCE(
             (
                 SELECT n
@@ -97,8 +100,12 @@ BEGIN
         ) + 1
     INTO next_n;
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (p_session_id, next_n, p_url);
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, p_url, clock_timestamp());
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
@@ -117,7 +124,7 @@ BEGIN
     WHERE id = p_session_id
     FOR UPDATE;
 
-    IF v_url IS NULL THEN
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
@@ -134,8 +141,8 @@ BEGIN
         ) + 1
     INTO next_n;
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (p_session_id, next_n, v_url);
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, v_url, clock_timestamp());
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
@@ -268,6 +275,17 @@ SELECT (
 ) = count(*) AS sequential
 FROM pgb_session.history WHERE session_id = :'sid';
  sequential 
+------------
+ t
+(1 row)
+
+-- Verify history timestamps increase with navigation order
+SELECT bool_and(ts >= lag_ts) AS ts_ordered
+FROM (
+    SELECT ts, lag(ts) OVER (ORDER BY n) AS lag_ts
+    FROM pgb_session.history WHERE session_id = :'sid'
+) s WHERE lag_ts IS NOT NULL;
+ ts_ordered 
 ------------
  t
 (1 row)
