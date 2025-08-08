@@ -39,7 +39,23 @@ SELECT (
 FROM pgb_session.history WHERE session_id = :'sid';
 
 -- Reject invalid URL scheme on navigate
-SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
+DO $$
+DECLARE
+    v_sid UUID;
+BEGIN
+    SELECT id INTO v_sid FROM pgb_session.session LIMIT 1;
+
+    BEGIN
+        PERFORM pgb_session.navigate(v_sid, 'ftp://example.com');
+        RAISE EXCEPTION 'navigate did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Close the session
 SELECT pgb_session.close(:'sid');
@@ -58,16 +74,76 @@ SELECT pgb_session.open('HTTP://example.com') IS NOT NULL AS http_upper_opened;
 SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened;
 
 -- Reject invalid URL scheme
-SELECT pgb_session.open('ftp://example.com');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('ftp://example.com');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Reject invalid URL scheme on direct insert
-INSERT INTO pgb_session.session(id, created_at, current_url)
-VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Ensure empty URL raises an exception
-SELECT pgb_session.open('');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Validate URLs directly using helper
 SELECT pgb_session.validate_url('http://example.com');
-SELECT pgb_session.validate_url('ftp://example.com');
-SELECT pgb_session.validate_url('');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.validate_url('ftp://example.com');
+        RAISE EXCEPTION 'validation did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.validate_url('');
+        RAISE EXCEPTION 'validation did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
