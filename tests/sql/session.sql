@@ -44,8 +44,31 @@ SELECT (
 ) = count(*) AS sequential
 FROM pgb_session.history WHERE session_id = :'sid';
 
+-- Verify history timestamps increase with navigation order
+SELECT bool_and(ts >= lag_ts) AS ts_ordered
+FROM (
+    SELECT ts, lag(ts) OVER (ORDER BY n) AS lag_ts
+    FROM pgb_session.history WHERE session_id = :'sid'
+) s WHERE lag_ts IS NOT NULL;
+
 -- Reject invalid URL scheme on navigate
-SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
+DO $$
+DECLARE
+    v_sid UUID;
+BEGIN
+    SELECT id INTO v_sid FROM pgb_session.session LIMIT 1;
+
+    BEGIN
+        PERFORM pgb_session.navigate(v_sid, 'ftp://example.com');
+        RAISE EXCEPTION 'navigate did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Close the session
 SELECT pgb_session.close(:'sid');
@@ -59,21 +82,87 @@ SELECT count(*) AS history_count_after_close FROM pgb_session.history;
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
 SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 
--- Accept uppercase URL schemes
-SELECT pgb_session.open('HTTP://example.com') IS NOT NULL AS http_upper_opened;
-SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened;
+-- Trim surrounding whitespace
+SELECT pgb_session.open(' http://example.com ') IS NOT NULL AS http_whitespace_opened;
+
+-- Reject uppercase URL schemes
+SELECT pgb_session.open('HTTP://example.com');
+SELECT pgb_session.open('HTTPS://example.com');
 
 -- Reject invalid URL scheme
-SELECT pgb_session.open('ftp://example.com');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('ftp://example.com');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+
+-- Reject malformed URLs
+SELECT pgb_session.open('http:///missinghost');
 
 -- Reject invalid URL scheme on direct insert
-INSERT INTO pgb_session.session(id, created_at, current_url)
-VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Ensure empty URL raises an exception
-SELECT pgb_session.open('');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
 
 -- Validate URLs directly using helper
 SELECT pgb_session.validate_url('http://example.com');
-SELECT pgb_session.validate_url('ftp://example.com');
-SELECT pgb_session.validate_url('');
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.validate_url('ftp://example.com');
+        RAISE EXCEPTION 'validation did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.validate_url('');
+        RAISE EXCEPTION 'validation did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;

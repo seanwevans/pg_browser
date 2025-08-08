@@ -11,6 +11,7 @@ BEGIN
     EXCEPTION
         WHEN sqlstate 'PGBNS' THEN
             RAISE NOTICE 'snapshot error raised as expected';
+
         WHEN others THEN
             RAISE EXCEPTION 'unexpected error: %', SQLERRM;
     END;

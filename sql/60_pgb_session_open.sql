@@ -7,6 +7,7 @@ DECLARE
     session_state JSONB;
     session_url TEXT;
 BEGIN
+    p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
@@ -16,8 +17,8 @@ BEGIN
     INSERT INTO pgb_session.snapshot(session_id, state, current_url)
     VALUES (sid, session_state, session_url);
 
-    INSERT INTO pgb_session.history(session_id, n, url)
-    VALUES (sid, 1, p_url);
+    INSERT INTO pgb_session.history(session_id, url)
+    VALUES (sid, p_url);
 
     RETURN sid;
 END;
