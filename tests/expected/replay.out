@@ -78,9 +78,8 @@ CREATE OR REPLACE FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
 AS $$
-DECLARE
-    next_n BIGINT;
 BEGIN
+
     p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
@@ -116,6 +115,7 @@ BEGIN
 
     INSERT INTO pgb_session.history(session_id, n, url, ts)
     VALUES (p_session_id, next_n, p_url, clock_timestamp());
+
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
@@ -127,12 +127,10 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     v_url TEXT;
-    next_n BIGINT;
 BEGIN
     SELECT current_url INTO v_url
     FROM pgb_session.session
-    WHERE id = p_session_id
-    FOR UPDATE;
+    WHERE id = p_session_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
@@ -153,6 +151,7 @@ BEGIN
 
     INSERT INTO pgb_session.history(session_id, n, url, ts)
     VALUES (p_session_id, next_n, v_url, clock_timestamp());
+
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
