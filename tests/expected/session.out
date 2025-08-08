@@ -53,13 +53,18 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     sid UUID;
+    session_state JSONB;
+    session_url TEXT;
 BEGIN
     p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
-    RETURNING id INTO sid;
+    RETURNING id, state, current_url INTO sid, session_state, session_url;
+
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (sid, session_state, session_url);
 
     INSERT INTO pgb_session.history(session_id, url)
     VALUES (sid, p_url);
@@ -223,6 +228,21 @@ SELECT :'sid' IS NOT NULL AS opened;
  t
 (1 row)
 
+-- Verify snapshot inserted with initial state and URL
+SELECT count(*) = 1 AS snapshot_created
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_created 
+------------------
+ t
+(1 row)
+
+SELECT state = '{}'::jsonb AND current_url = 'pgb://local/demo' AS snapshot_matches
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_matches 
+------------------
+ t
+(1 row)
+
 -- Reload the session
 SELECT pgb_session.reload(:'sid');
  reload 
@@ -358,28 +378,7 @@ SELECT pgb_session.open('HTTP://example.com');
 ERROR:  invalid URL: HTTP://example.com
 CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
 SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 6 at PERFORM
-SELECT pgb_session.open('HTTPS://example.com');
-ERROR:  invalid URL: HTTPS://example.com
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 6 at PERFORM
--- Reject invalid URL scheme
-
-DO $$
-BEGIN
-    BEGIN
-        PERFORM pgb_session.open('ftp://example.com');
-        RAISE EXCEPTION 'open did not fail';
-    EXCEPTION
-        WHEN sqlstate 'PGBUV' THEN
-            RAISE NOTICE 'error raised as expected';
-        WHEN others THEN
-            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
-    END;
-END;
-$$;
-NOTICE:  error raised as expected
+PL/pgSQL function pgb_session.open(text) line 7 at PERFORM
 
 -- Reject invalid URL scheme on direct insert
 DO $$
@@ -399,20 +398,11 @@ $$;
 NOTICE:  error raised as expected
 -- Ensure empty URL raises an exception
 
-DO $$
-BEGIN
-    BEGIN
-        PERFORM pgb_session.open('');
-        RAISE EXCEPTION 'open did not fail';
-    EXCEPTION
-        WHEN sqlstate 'PGBUV' THEN
-            RAISE NOTICE 'error raised as expected';
-        WHEN others THEN
-            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
-    END;
-END;
-$$;
-NOTICE:  error raised as expected
+SELECT pgb_session.open('');
+ERROR:  url must not be empty
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 4 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 7 at PERFORM
 
 -- Validate URLs directly using helper
 SELECT pgb_session.validate_url('http://example.com');

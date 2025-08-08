@@ -11,6 +11,12 @@ SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 -- Ensure an ID is returned
 SELECT :'sid' IS NOT NULL AS opened;
 
+-- Verify snapshot inserted with initial state and URL
+SELECT count(*) = 1 AS snapshot_created
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+SELECT state = '{}'::jsonb AND current_url = 'pgb://local/demo' AS snapshot_matches
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+
 -- Reload the session
 SELECT pgb_session.reload(:'sid');
 
