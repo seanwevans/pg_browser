@@ -38,6 +38,13 @@ SELECT (
 ) = count(*) AS sequential
 FROM pgb_session.history WHERE session_id = :'sid';
 
+-- Verify history timestamps increase with navigation order
+SELECT bool_and(ts >= lag_ts) AS ts_ordered
+FROM (
+    SELECT ts, lag(ts) OVER (ORDER BY n) AS lag_ts
+    FROM pgb_session.history WHERE session_id = :'sid'
+) s WHERE lag_ts IS NOT NULL;
+
 -- Reject invalid URL scheme on navigate
 DO $$
 DECLARE
@@ -69,9 +76,12 @@ SELECT count(*) AS history_count_after_close FROM pgb_session.history;
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
 SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 
--- Accept uppercase URL schemes
-SELECT pgb_session.open('HTTP://example.com') IS NOT NULL AS http_upper_opened;
-SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened;
+-- Trim surrounding whitespace
+SELECT pgb_session.open(' http://example.com ') IS NOT NULL AS http_whitespace_opened;
+
+-- Reject uppercase URL schemes
+SELECT pgb_session.open('HTTP://example.com');
+SELECT pgb_session.open('HTTPS://example.com');
 
 -- Reject invalid URL scheme
 DO $$
@@ -87,6 +97,9 @@ BEGIN
     END;
 END;
 $$;
+
+-- Reject malformed URLs
+SELECT pgb_session.open('http:///missinghost');
 
 -- Reject invalid URL scheme on direct insert
 DO $$

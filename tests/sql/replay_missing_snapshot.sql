@@ -8,7 +8,7 @@ BEGIN
         PERFORM pgb_session.replay(sid, now());
         RAISE EXCEPTION 'replay did not fail';
     EXCEPTION
-        WHEN sqlstate 'PGBSN' THEN
+        WHEN sqlstate 'PGBNS' THEN
             RAISE NOTICE 'error raised as expected';
         WHEN others THEN
             RAISE EXCEPTION 'unexpected error: %', SQLERRM;
