@@ -34,6 +34,7 @@ AS $$
 DECLARE
     next_n BIGINT;
 BEGIN
+    p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
     -- Acquire a lock on the session row to serialize concurrent
