@@ -38,6 +38,13 @@ SELECT (
 ) = count(*) AS sequential
 FROM pgb_session.history WHERE session_id = :'sid';
 
+-- Verify history timestamps increase with navigation order
+SELECT bool_and(ts >= lag_ts) AS ts_ordered
+FROM (
+    SELECT ts, lag(ts) OVER (ORDER BY n) AS lag_ts
+    FROM pgb_session.history WHERE session_id = :'sid'
+) s WHERE lag_ts IS NOT NULL;
+
 -- Reject invalid URL scheme on navigate
 SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
 

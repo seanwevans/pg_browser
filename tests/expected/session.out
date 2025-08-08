@@ -72,17 +72,39 @@ AS $$
 BEGIN
     PERFORM pgb_session.validate_url(p_url);
 
-    UPDATE pgb_session.session
-    SET current_url = p_url
-    WHERE id = p_session_id;
+    -- Acquire a lock on the session row to serialize concurrent
+    -- navigations and ensure next_n uniqueness.
+    PERFORM 1
+    FROM pgb_session.session
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    INSERT INTO pgb_session.history(session_id, url, ts)
-    VALUES (p_session_id, p_url, clock_timestamp());
+    -- Recalculate next_n after obtaining the lock to avoid conflicts
+    -- between concurrent calls.
+    SELECT COALESCE(
+            (
+                SELECT n
+                FROM pgb_session.history
+                WHERE session_id = p_session_id
+                ORDER BY n DESC
+                LIMIT 1
+            ),
+            0
+        ) + 1
+    INTO next_n;
+
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
+
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, p_url, clock_timestamp());
+
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
@@ -104,8 +126,21 @@ BEGIN
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    INSERT INTO pgb_session.history(session_id, url, ts)
-    VALUES (p_session_id, v_url, clock_timestamp());
+    SELECT COALESCE(
+            (
+                SELECT n
+                FROM pgb_session.history
+                WHERE session_id = p_session_id
+                ORDER BY n DESC
+                LIMIT 1
+            ),
+            0
+        ) + 1
+    INTO next_n;
+
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (p_session_id, next_n, v_url, clock_timestamp());
+
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
@@ -238,6 +273,17 @@ SELECT (
 ) = count(*) AS sequential
 FROM pgb_session.history WHERE session_id = :'sid';
  sequential 
+------------
+ t
+(1 row)
+
+-- Verify history timestamps increase with navigation order
+SELECT bool_and(ts >= lag_ts) AS ts_ordered
+FROM (
+    SELECT ts, lag(ts) OVER (ORDER BY n) AS lag_ts
+    FROM pgb_session.history WHERE session_id = :'sid'
+) s WHERE lag_ts IS NOT NULL;
+ ts_ordered 
 ------------
  t
 (1 row)
