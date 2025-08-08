@@ -32,6 +32,7 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $$
 BEGIN
+    p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
     UPDATE pgb_session.session

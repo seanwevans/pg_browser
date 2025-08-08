@@ -60,12 +60,18 @@ SELECT count(*) AS history_count_after_close FROM pgb_session.history;
 SELECT pgb_session.open('http://example.com') IS NOT NULL AS http_opened;
 SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 
--- Accept uppercase URL schemes
-SELECT pgb_session.open('HTTP://example.com') IS NOT NULL AS http_upper_opened;
-SELECT pgb_session.open('HTTPS://example.com') IS NOT NULL AS https_upper_opened;
+-- Trim surrounding whitespace
+SELECT pgb_session.open(' http://example.com ') IS NOT NULL AS http_whitespace_opened;
+
+-- Reject uppercase URL schemes
+SELECT pgb_session.open('HTTP://example.com');
+SELECT pgb_session.open('HTTPS://example.com');
 
 -- Reject invalid URL scheme
 SELECT pgb_session.open('ftp://example.com');
+
+-- Reject malformed URLs
+SELECT pgb_session.open('http:///missinghost');
 
 -- Reject invalid URL scheme on direct insert
 INSERT INTO pgb_session.session(id, created_at, current_url)

@@ -5,6 +5,7 @@ AS $$
 DECLARE
     sid UUID;
 BEGIN
+    p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
