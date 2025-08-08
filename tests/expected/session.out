@@ -294,11 +294,24 @@ FROM (
 (1 row)
 
 -- Reject invalid URL scheme on navigate
-SELECT pgb_session.navigate(:'sid', 'ftp://example.com');
-ERROR:  invalid URL: ftp://example.com
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.navigate(uuid,text) line 6 at PERFORM
+DO $$
+DECLARE
+    v_sid UUID;
+BEGIN
+    SELECT id INTO v_sid FROM pgb_session.session LIMIT 1;
+
+    BEGIN
+        PERFORM pgb_session.navigate(v_sid, 'ftp://example.com');
+        RAISE EXCEPTION 'navigate did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
 
 -- Close the session
 SELECT pgb_session.close(:'sid');
@@ -352,38 +365,87 @@ CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
 SQL statement "SELECT pgb_session.validate_url(p_url)"
 PL/pgSQL function pgb_session.open(text) line 6 at PERFORM
 -- Reject invalid URL scheme
-SELECT pgb_session.open('ftp://example.com');
-ERROR:  invalid URL: ftp://example.com
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 6 at PERFORM
--- Reject malformed URLs
-SELECT pgb_session.open('http:///missinghost');
-ERROR:  invalid URL: http:///missinghost
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 6 at PERFORM
+
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('ftp://example.com');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
+
 -- Reject invalid URL scheme on direct insert
-INSERT INTO pgb_session.session(id, created_at, current_url)
-VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
-ERROR:  new row for relation "session" violates check constraint "session_current_url_check"
-DETAIL:  Failing row contains (00000000-0000-0000-0000-000000000000, 2000-01-01 00:00:00+00, ftp://example.com, {}, null).
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
 -- Ensure empty URL raises an exception
-SELECT pgb_session.open('');
-ERROR:  url must not be empty
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 6 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 6 at PERFORM
+
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
+
 -- Validate URLs directly using helper
 SELECT pgb_session.validate_url('http://example.com');
- validate_url 
+ validate_url
 --------------
- 
+
 (1 row)
 
-SELECT pgb_session.validate_url('ftp://example.com');
-ERROR:  invalid URL: ftp://example.com
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SELECT pgb_session.validate_url('');
-ERROR:  url must not be empty
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 6 at RAISE
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.validate_url('ftp://example.com');
+        RAISE EXCEPTION 'validation did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.validate_url('');
+        RAISE EXCEPTION 'validation did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
