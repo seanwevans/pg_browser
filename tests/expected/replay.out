@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
 psql:../../sql/60_pgb_session.sql:25: NOTICE:  relation "snapshot" already exists, skipping
 \ir 60_pgb_session_validate_url.sql
 CREATE OR REPLACE FUNCTION pgb_session.validate_url(p_url TEXT)
-RETURNS VOID
+RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -47,10 +47,12 @@ BEGIN
         RAISE EXCEPTION 'invalid URL: %', v_url
             USING ERRCODE = 'PGBUV';
     END IF;
+
+    RETURN v_url;
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
-    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path.';
+    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path. Returns the trimmed URL.';
 \ir 60_pgb_session_open.sql
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
@@ -61,8 +63,7 @@ DECLARE
     session_state JSONB;
     session_url TEXT;
 BEGIN
-    p_url := trim(p_url);
-    PERFORM pgb_session.validate_url(p_url);
+    p_url := pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
@@ -84,8 +85,7 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    p_url := trim(p_url);
-    PERFORM pgb_session.validate_url(p_url);
+    p_url := pgb_session.validate_url(p_url);
 
     UPDATE pgb_session.session
     SET current_url = p_url

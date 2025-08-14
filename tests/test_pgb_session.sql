@@ -40,8 +40,9 @@ BEGIN
     UPDATE pgb_session.session
     SET current_url = 'pgb://local/other', state = '{"foo":"bar"}'
     WHERE id = sid;
-    INSERT INTO pgb_session.history(session_id, url, ts)
-    VALUES (sid, 'pgb://local/other', clock_timestamp());
+    PERFORM pg_sleep(0.001);
+    INSERT INTO pgb_session.history(session_id, n, url, ts)
+    VALUES (sid, 2, 'pgb://local/other', clock_timestamp());
 
     -- Replay to snapshot
     PERFORM pgb_session.replay(sid, snap_ts);
@@ -156,6 +157,7 @@ BEGIN
         END;
 
         sid2 := pgb_session.open('pgb://local/tmp');
+        DELETE FROM pgb_session.snapshot WHERE session_id = sid2;
         BEGIN
             PERFORM pgb_session.replay(sid2, 'epoch'::timestamptz);
             RAISE EXCEPTION 'replay did not fail';

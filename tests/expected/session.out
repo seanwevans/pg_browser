@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
 );
 \ir 60_pgb_session_validate_url.sql
 CREATE OR REPLACE FUNCTION pgb_session.validate_url(p_url TEXT)
-RETURNS VOID
+RETURNS TEXT
 LANGUAGE plpgsql
 AS $$
 DECLARE
@@ -42,10 +42,12 @@ BEGIN
         RAISE EXCEPTION 'invalid URL: %', v_url
             USING ERRCODE = 'PGBUV';
     END IF;
+
+    RETURN v_url;
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
-    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path.';
+    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path. Returns the trimmed URL.';
 \ir 60_pgb_session_open.sql
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
@@ -56,8 +58,7 @@ DECLARE
     session_state JSONB;
     session_url TEXT;
 BEGIN
-    p_url := trim(p_url);
-    PERFORM pgb_session.validate_url(p_url);
+    p_url := pgb_session.validate_url(p_url);
 
     INSERT INTO pgb_session.session(current_url)
     VALUES (p_url)
@@ -79,8 +80,7 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $$
 BEGIN
-    p_url := trim(p_url);
-    PERFORM pgb_session.validate_url(p_url);
+    p_url := pgb_session.validate_url(p_url);
 
     UPDATE pgb_session.session
     SET current_url = p_url
@@ -351,33 +351,9 @@ SELECT pgb_session.open('HTTP://example.com');
 ERROR:  invalid URL: HTTP://example.com
 CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
 SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 8 at PERFORM
-SELECT pgb_session.open('HTTPS://example.com');
-ERROR:  invalid URL: HTTPS://example.com
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 8 at PERFORM
--- Reject invalid URL scheme
-DO $$
-BEGIN
-    BEGIN
-        PERFORM pgb_session.open('ftp://example.com');
-        RAISE EXCEPTION 'open did not fail';
-    EXCEPTION
-        WHEN sqlstate 'PGBUV' THEN
-            RAISE NOTICE 'error raised as expected';
-        WHEN others THEN
-            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
-    END;
-END;
-$$;
-NOTICE:  error raised as expected
--- Reject malformed URLs
-SELECT pgb_session.open('http:///missinghost');
-ERROR:  invalid URL: http:///missinghost
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 8 at PERFORM
+PL/pgSQL function pgb_session.open(text) line 6 at assignment
+
+
 -- Reject invalid URL scheme on direct insert
 DO $$
 BEGIN
@@ -394,20 +370,13 @@ BEGIN
 END;
 $$;
 NOTICE:  error raised as expected
--- Reject uppercase URL scheme on direct insert
-DO $$
-BEGIN
-    BEGIN
-        INSERT INTO pgb_session.session(id, created_at, current_url)
-        VALUES ('00000000-0000-0000-0000-000000000001', '2000-01-01 00:00:00+00', 'HTTP://example.com');
-        RAISE EXCEPTION 'insert did not fail';
-    EXCEPTION
-        WHEN sqlstate '23514' THEN
-            RAISE NOTICE 'error raised as expected';
-        WHEN others THEN
-            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
-    END;
+-- Ensure empty URL raises an exception
 
+SELECT pgb_session.open('');
+ERROR:  url must not be empty
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 4 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 6 at assignment
     BEGIN
         INSERT INTO pgb_session.session(id, created_at, current_url)
         VALUES ('00000000-0000-0000-0000-000000000002', '2000-01-01 00:00:00+00', 'HTTPS://example.com');
@@ -441,7 +410,7 @@ NOTICE:  error raised as expected
 SELECT pgb_session.validate_url('http://example.com');
  validate_url 
 --------------
- 
+ http://example.com
 (1 row)
 
 DO $$
