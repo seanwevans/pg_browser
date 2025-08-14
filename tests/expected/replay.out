@@ -167,6 +167,15 @@ BEGIN
     DELETE FROM pgb_session.history
     WHERE session_id = p_session_id
       AND ts > v_snap_ts;
+
+    -- Remove snapshots taken after the target snapshot
+    DELETE FROM pgb_session.snapshot
+    WHERE session_id = p_session_id
+      AND ts > v_snap_ts;
+
+    -- Record a new snapshot of the restored state
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (p_session_id, v_state, v_url);
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ) IS
@@ -200,6 +209,11 @@ RETURNING ts AS snap_ts \gset
 UPDATE pgb_session.session SET current_url = 'pgb://local/other', state = '{"foo":"bar"}' WHERE id = :'sid';
 INSERT INTO pgb_session.history(session_id, n, url)
 VALUES (:'sid', 2, 'pgb://local/other');
+-- Take a snapshot of the mutated state to ensure replay cleans it up
+INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+SELECT :'sid', state, current_url
+FROM pgb_session.session WHERE id = :'sid'
+RETURNING ts AS future_ts \gset
 -- Verify state before replay
 SELECT current_url, state FROM pgb_session.session WHERE id = :'sid';
     current_url    |     state      
@@ -238,4 +252,24 @@ SELECT url FROM pgb_session.history WHERE session_id = :'sid' ORDER BY n;
 ------------------
  pgb://local/demo
 (1 row)
+
+SELECT count(*) AS future_snapshot_exists FROM pgb_session.snapshot WHERE session_id = :'sid' AND ts = :'future_ts';
+ future_snapshot_exists 
+------------------------
+                      0
+(1 row)
+
+SELECT count(*) AS snapshots_newer_after FROM pgb_session.snapshot WHERE session_id = :'sid' AND ts > :'snap_ts';
+ snapshots_newer_after 
+-----------------------
+                     1
+(1 row)
+
+SELECT state, current_url FROM pgb_session.snapshot WHERE session_id = :'sid' ORDER BY ts;
+ state |   current_url    
+-------+------------------
+ {}    | pgb://local/demo
+ {}    | pgb://local/demo
+ {}    | pgb://local/demo
+(3 rows)
 
