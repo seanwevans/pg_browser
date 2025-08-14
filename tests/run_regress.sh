@@ -20,5 +20,5 @@ export PGHOST="${PGHOST:-localhost}"
 
 cd "$SCRIPT_DIR/sql"
 "$PG_REGRESS" --inputdir="$SCRIPT_DIR" --outputdir="$OUTPUT_DIR" --expecteddir="$SCRIPT_DIR/expected" \
-  session reload_invalid reload_concurrent replay replay_missing_snapshot replay_invalid
+  session reload_invalid reload_concurrent navigate_concurrent replay replay_missing_snapshot replay_invalid
 

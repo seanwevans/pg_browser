@@ -82,39 +82,17 @@ BEGIN
     p_url := trim(p_url);
     PERFORM pgb_session.validate_url(p_url);
 
-    -- Acquire a lock on the session row to serialize concurrent
-    -- navigations and ensure next_n uniqueness.
-    PERFORM 1
-    FROM pgb_session.session
-    WHERE id = p_session_id
-    FOR UPDATE;
+    UPDATE pgb_session.session
+    SET current_url = p_url
+    WHERE id = p_session_id;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    -- Recalculate next_n after obtaining the lock to avoid conflicts
-    -- between concurrent calls.
-    SELECT COALESCE(
-            (
-                SELECT n
-                FROM pgb_session.history
-                WHERE session_id = p_session_id
-                ORDER BY n DESC
-                LIMIT 1
-            ),
-            0
-        ) + 1
-    INTO next_n;
-
-    UPDATE pgb_session.session
-    SET current_url = p_url
-    WHERE id = p_session_id;
-
-    INSERT INTO pgb_session.history(session_id, n, url, ts)
-    VALUES (p_session_id, next_n, p_url, clock_timestamp());
-
+    INSERT INTO pgb_session.history(session_id, url, ts)
+    VALUES (p_session_id, p_url, clock_timestamp());
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
@@ -136,21 +114,8 @@ BEGIN
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    SELECT COALESCE(
-            (
-                SELECT n
-                FROM pgb_session.history
-                WHERE session_id = p_session_id
-                ORDER BY n DESC
-                LIMIT 1
-            ),
-            0
-        ) + 1
-    INTO next_n;
-
-    INSERT INTO pgb_session.history(session_id, n, url, ts)
-    VALUES (p_session_id, next_n, v_url, clock_timestamp());
-
+    INSERT INTO pgb_session.history(session_id, url, ts)
+    VALUES (p_session_id, v_url, clock_timestamp());
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
@@ -197,6 +162,15 @@ BEGIN
     DELETE FROM pgb_session.history
     WHERE session_id = p_session_id
       AND ts > v_snap_ts;
+
+    -- Remove snapshots taken after the target snapshot
+    DELETE FROM pgb_session.snapshot
+    WHERE session_id = p_session_id
+      AND ts > v_snap_ts;
+
+    -- Record a new snapshot of the restored state
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (p_session_id, v_state, v_url);
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ) IS
@@ -332,7 +306,6 @@ BEGIN
 END;
 $$;
 NOTICE:  error raised as expected
-
 -- Close the session
 SELECT pgb_session.close(:'sid');
  close 
@@ -378,8 +351,33 @@ SELECT pgb_session.open('HTTP://example.com');
 ERROR:  invalid URL: HTTP://example.com
 CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
 SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 7 at PERFORM
-
+PL/pgSQL function pgb_session.open(text) line 8 at PERFORM
+SELECT pgb_session.open('HTTPS://example.com');
+ERROR:  invalid URL: HTTPS://example.com
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 8 at PERFORM
+-- Reject invalid URL scheme
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('ftp://example.com');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
+-- Reject malformed URLs
+SELECT pgb_session.open('http:///missinghost');
+ERROR:  invalid URL: http:///missinghost
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 8 at PERFORM
 -- Reject invalid URL scheme on direct insert
 DO $$
 BEGIN
@@ -396,19 +394,54 @@ BEGIN
 END;
 $$;
 NOTICE:  error raised as expected
+-- Reject uppercase URL scheme on direct insert
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000001', '2000-01-01 00:00:00+00', 'HTTP://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000002', '2000-01-01 00:00:00+00', 'HTTPS://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
+NOTICE:  error raised as expected
 -- Ensure empty URL raises an exception
-
-SELECT pgb_session.open('');
-ERROR:  url must not be empty
-CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 4 at RAISE
-SQL statement "SELECT pgb_session.validate_url(p_url)"
-PL/pgSQL function pgb_session.open(text) line 7 at PERFORM
-
+DO $$
+BEGIN
+    BEGIN
+        PERFORM pgb_session.open('');
+        RAISE EXCEPTION 'open did not fail';
+    EXCEPTION
+        WHEN sqlstate 'PGBUV' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+NOTICE:  error raised as expected
 -- Validate URLs directly using helper
 SELECT pgb_session.validate_url('http://example.com');
- validate_url
+ validate_url 
 --------------
-
+ 
 (1 row)
 
 DO $$
