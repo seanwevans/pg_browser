@@ -2,7 +2,7 @@ CREATE SCHEMA IF NOT EXISTS pgb_session;
 
 CREATE TABLE IF NOT EXISTS pgb_session.session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     current_url TEXT NOT NULL CONSTRAINT session_current_url_check CHECK (current_url ~* '^(pgb|https?)://'),
     state JSONB NOT NULL DEFAULT '{}'::jsonb,
     focus UUID
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
 
 CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
-    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ts TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     state JSONB NOT NULL,
     current_url TEXT NOT NULL,
     PRIMARY KEY(session_id, ts)
