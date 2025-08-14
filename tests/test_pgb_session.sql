@@ -75,7 +75,7 @@ BEGIN
     END IF;
     IF NOT EXISTS (
         SELECT 1 FROM pgb_session.history
-        WHERE session_id = sid AND n = 2 AND url = 'http://example.com'
+        WHERE session_id = sid AND n = 3 AND url = 'http://example.com'
     ) THEN
         RAISE EXCEPTION 'history row missing after first navigate';
     END IF;
@@ -89,7 +89,7 @@ BEGIN
     END IF;
     IF NOT EXISTS (
         SELECT 1 FROM pgb_session.history
-        WHERE session_id = sid AND n = 3 AND url = 'https://example.org'
+        WHERE session_id = sid AND n = 4 AND url = 'https://example.org'
     ) THEN
         RAISE EXCEPTION 'history row missing after second navigate';
     END IF;
@@ -99,7 +99,7 @@ BEGIN
         WHERE session_id = sid
         ORDER BY n DESC
         LIMIT 1
-    ) <> 3 THEN
+    ) <> 4 THEN
         RAISE EXCEPTION 'navigate did not produce sequential numbering';
     END IF;
 
@@ -115,7 +115,7 @@ BEGIN
             ORDER BY h.n DESC
             LIMIT 1
         ) h ON true
-        WHERE s.id = sid AND h.n = 4 AND h.url = s.current_url
+        WHERE s.id = sid AND h.n = 5 AND h.url = s.current_url
     ) THEN
         RAISE EXCEPTION 'reload did not update history correctly';
     END IF;
@@ -126,7 +126,7 @@ BEGIN
         WHERE session_id = sid
         ORDER BY n DESC
         LIMIT 1
-    ) <> 4 THEN
+    ) <> 5 THEN
         RAISE EXCEPTION 'reload did not produce sequential numbering';
     END IF;
 
@@ -159,7 +159,7 @@ BEGIN
         sid2 := pgb_session.open('pgb://local/tmp');
         DELETE FROM pgb_session.snapshot WHERE session_id = sid2;
         BEGIN
-            PERFORM pgb_session.replay(sid2, clock_timestamp());
+            PERFORM pgb_session.replay(sid2, 'epoch'::timestamptz);
             RAISE EXCEPTION 'replay did not fail';
         EXCEPTION
             WHEN sqlstate 'PGBNS' THEN

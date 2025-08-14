@@ -45,7 +45,7 @@ SELECT (
 FROM pgb_session.history WHERE session_id = :'sid';
 
 -- Verify history timestamps increase with navigation order
-SELECT bool_and(ts >= lag_ts) AS ts_ordered
+SELECT bool_and(ts > lag_ts) AS ts_ordered
 FROM (
     SELECT ts, lag(ts) OVER (ORDER BY n) AS lag_ts
     FROM pgb_session.history WHERE session_id = :'sid'
@@ -113,6 +113,33 @@ BEGIN
     BEGIN
         INSERT INTO pgb_session.session(id, created_at, current_url)
         VALUES ('00000000-0000-0000-0000-000000000000', '2000-01-01 00:00:00+00', 'ftp://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+END;
+$$;
+
+-- Reject uppercase URL scheme on direct insert
+DO $$
+BEGIN
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000001', '2000-01-01 00:00:00+00', 'HTTP://example.com');
+        RAISE EXCEPTION 'insert did not fail';
+    EXCEPTION
+        WHEN sqlstate '23514' THEN
+            RAISE NOTICE 'error raised as expected';
+        WHEN others THEN
+            RAISE EXCEPTION 'unexpected error: %', SQLERRM;
+    END;
+
+    BEGIN
+        INSERT INTO pgb_session.session(id, created_at, current_url)
+        VALUES ('00000000-0000-0000-0000-000000000002', '2000-01-01 00:00:00+00', 'HTTPS://example.com');
         RAISE EXCEPTION 'insert did not fail';
     EXCEPTION
         WHEN sqlstate '23514' THEN

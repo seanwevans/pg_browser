@@ -2,11 +2,24 @@ CREATE SCHEMA IF NOT EXISTS pgb_session;
 
 CREATE TABLE IF NOT EXISTS pgb_session.session (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     current_url TEXT NOT NULL CONSTRAINT session_current_url_check CHECK (current_url ~* '^(pgb|https?)://'),
     state JSONB NOT NULL DEFAULT '{}'::jsonb,
     focus UUID
 );
+
+COMMENT ON TABLE pgb_session.session IS
+    'Active sessions with their current URL and state.';
+COMMENT ON COLUMN pgb_session.session.id IS
+    'Unique identifier for the session.';
+COMMENT ON COLUMN pgb_session.session.created_at IS
+    'Timestamp when the session was created.';
+COMMENT ON COLUMN pgb_session.session.current_url IS
+    'Current URL for the session; must begin with pgb://, http://, or https://.';
+COMMENT ON COLUMN pgb_session.session.state IS
+    'Arbitrary JSONB data representing the session state.';
+COMMENT ON COLUMN pgb_session.session.focus IS
+    'Identifier of the currently focused element, if any.';
 
 CREATE TABLE IF NOT EXISTS pgb_session.history (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
@@ -16,13 +29,35 @@ CREATE TABLE IF NOT EXISTS pgb_session.history (
     PRIMARY KEY(session_id, n)
 );
 
+COMMENT ON TABLE pgb_session.history IS
+    'Navigation history entries for sessions.';
+COMMENT ON COLUMN pgb_session.history.session_id IS
+    'Owning session for this history entry.';
+COMMENT ON COLUMN pgb_session.history.n IS
+    'Sequential number of the history entry within a session.';
+COMMENT ON COLUMN pgb_session.history.url IS
+    'URL that was visited.';
+COMMENT ON COLUMN pgb_session.history.ts IS
+    'Timestamp when the URL was recorded.';
+
 CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     session_id UUID NOT NULL REFERENCES pgb_session.session(id) ON DELETE CASCADE,
-    ts TIMESTAMPTZ NOT NULL DEFAULT now(),
+    ts TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     state JSONB NOT NULL,
     current_url TEXT NOT NULL,
     PRIMARY KEY(session_id, ts)
 );
+
+COMMENT ON TABLE pgb_session.snapshot IS
+    'Stored snapshots of session state used for replay.';
+COMMENT ON COLUMN pgb_session.snapshot.session_id IS
+    'Session associated with this snapshot.';
+COMMENT ON COLUMN pgb_session.snapshot.ts IS
+    'Timestamp when the snapshot was taken.';
+COMMENT ON COLUMN pgb_session.snapshot.state IS
+    'Session state captured at the snapshot time.';
+COMMENT ON COLUMN pgb_session.snapshot.current_url IS
+    'URL that was current when the snapshot was taken.';
 
 \ir 60_pgb_session_validate_url.sql
 \ir 60_pgb_session_open.sql
@@ -95,6 +130,15 @@ BEGIN
     DELETE FROM pgb_session.history
     WHERE session_id = p_session_id
       AND ts > v_snap_ts;
+
+    -- Remove snapshots taken after the target snapshot
+    DELETE FROM pgb_session.snapshot
+    WHERE session_id = p_session_id
+      AND ts > v_snap_ts;
+
+    -- Record a new snapshot of the restored state
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (p_session_id, v_state, v_url);
 END;
 $$;
 
