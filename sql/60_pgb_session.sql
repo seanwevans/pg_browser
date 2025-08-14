@@ -96,6 +96,15 @@ BEGIN
     DELETE FROM pgb_session.history
     WHERE session_id = p_session_id
       AND ts > v_snap_ts;
+
+    -- Remove snapshots taken after the target snapshot
+    DELETE FROM pgb_session.snapshot
+    WHERE session_id = p_session_id
+      AND ts > v_snap_ts;
+
+    -- Record a new snapshot of the restored state
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (p_session_id, v_state, v_url);
 END;
 $$;
 
