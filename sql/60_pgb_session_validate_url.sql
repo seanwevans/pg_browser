@@ -21,5 +21,5 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
-    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path. Returns the trimmed URL.';
+    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path. Raises SQLSTATE PGBUV if the URL is empty or invalid. Returns the trimmed URL.';
 
