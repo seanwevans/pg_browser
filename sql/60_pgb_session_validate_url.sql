@@ -22,4 +22,3 @@ $$;
 
 COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
     'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path, optional query, and optional fragment. Returns the trimmed URL.';
-

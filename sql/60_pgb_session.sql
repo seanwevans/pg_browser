@@ -84,7 +84,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
-    'Navigate to a new URL. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
+    'Navigate to a new URL. Raises SQLSTATE PGBSN if the session does not exist and PGBUV if the URL is invalid. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
 
 \ir 60_pgb_session_reload.sql
 
@@ -143,7 +143,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ) IS
-    'Rewind a session to a snapshot at or before p_ts. Parameters: p_session_id - session ID; p_ts - target timestamp. Example usage: SELECT pgb_session.replay(:session_id, ''2025-08-04T15:30:00Z''::timestamptz); Returns: void.';
+    'Rewind a session to a snapshot at or before p_ts. Raises SQLSTATE PGBSN if the session does not exist and PGBNS if no snapshot is found. Parameters: p_session_id - session ID; p_ts - target timestamp. Example usage: SELECT pgb_session.replay(:session_id, ''2025-08-04T15:30:00Z''::timestamptz); Returns: void.';
 
 CREATE OR REPLACE FUNCTION pgb_session.close(p_session_id UUID)
 RETURNS VOID
@@ -161,4 +161,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.close(p_session_id UUID) IS
-    'Close a session and remove all associated data. Parameters: p_session_id - session ID. Returns: void.';
+    'Close a session and remove all associated data. Raises SQLSTATE PGBSN if the session does not exist. Parameters: p_session_id - session ID. Returns: void.';

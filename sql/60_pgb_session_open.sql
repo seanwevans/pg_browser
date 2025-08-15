@@ -24,4 +24,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.open(p_url TEXT) IS
-    'Open a new session. Parameters: p_url - initial URL. Returns: session UUID.';
+    'Open a new session. Raises SQLSTATE PGBUV if the initial URL is invalid. Parameters: p_url - initial URL. Returns: session UUID.';
