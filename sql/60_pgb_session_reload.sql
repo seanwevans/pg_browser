@@ -20,4 +20,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
-    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+    'Record a reload event. Raises SQLSTATE PGBSN if the session does not exist. Parameters: p_session_id - session ID. Returns: void.';
