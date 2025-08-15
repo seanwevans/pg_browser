@@ -85,6 +85,14 @@ SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 -- Trim surrounding whitespace
 SELECT pgb_session.open(' http://example.com ') IS NOT NULL AS http_whitespace_opened;
 
+-- Accept URLs with query and fragment components
+SELECT pgb_session.open('http://example.com/path?foo=bar') IS NOT NULL AS http_query_opened;
+SELECT pgb_session.open('http://example.com/path?foo=bar#frag') IS NOT NULL AS http_query_fragment_opened;
+SELECT pgb_session.open('http://example.com/path#frag') IS NOT NULL AS http_fragment_opened;
+
+-- Reject malformed query/fragment URLs
+SELECT pgb_session.open('http://example.com/path#frag?bad');
+
 -- Reject uppercase URL schemes
 SELECT pgb_session.open('HTTP://example.com');
 SELECT pgb_session.open('HTTPS://example.com');

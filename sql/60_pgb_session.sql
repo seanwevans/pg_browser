@@ -15,7 +15,7 @@ COMMENT ON COLUMN pgb_session.session.id IS
 COMMENT ON COLUMN pgb_session.session.created_at IS
     'Timestamp when the session was created.';
 COMMENT ON COLUMN pgb_session.session.current_url IS
-    'Current URL for the session; must begin with pgb://, http://, or https://.';
+    'Current URL for the session; must begin with pgb://, http://, or https://, and may include path, query, and fragment components.';
 COMMENT ON COLUMN pgb_session.session.state IS
     'Arbitrary JSONB data representing the session state.';
 COMMENT ON COLUMN pgb_session.session.focus IS
