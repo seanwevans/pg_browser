@@ -15,7 +15,7 @@ COMMENT ON COLUMN pgb_session.session.id IS
 COMMENT ON COLUMN pgb_session.session.created_at IS
     'Timestamp when the session was created.';
 COMMENT ON COLUMN pgb_session.session.current_url IS
-    'Current URL for the session; must begin with pgb://, http://, or https://.';
+    'Current URL for the session; must begin with pgb://, http://, or https://, and may include path, query, and fragment components.';
 COMMENT ON COLUMN pgb_session.session.state IS
     'Arbitrary JSONB data representing the session state.';
 COMMENT ON COLUMN pgb_session.session.focus IS
@@ -92,6 +92,7 @@ $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
     'Navigate to a new URL and record a snapshot. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
 
+
 \ir 60_pgb_session_reload.sql
 
 CREATE OR REPLACE FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ)
@@ -149,7 +150,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ) IS
-    'Rewind a session to a snapshot at or before p_ts. Parameters: p_session_id - session ID; p_ts - target timestamp. Example usage: SELECT pgb_session.replay(:session_id, ''2025-08-04T15:30:00Z''::timestamptz); Returns: void.';
+    'Rewind a session to a snapshot at or before p_ts. Raises SQLSTATE PGBSN if the session does not exist and PGBNS if no snapshot is found. Parameters: p_session_id - session ID; p_ts - target timestamp. Example usage: SELECT pgb_session.replay(:session_id, ''2025-08-04T15:30:00Z''::timestamptz); Returns: void.';
 
 CREATE OR REPLACE FUNCTION pgb_session.close(p_session_id UUID)
 RETURNS VOID
@@ -167,4 +168,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.close(p_session_id UUID) IS
-    'Close a session and remove all associated data. Parameters: p_session_id - session ID. Returns: void.';
+    'Close a session and remove all associated data. Raises SQLSTATE PGBSN if the session does not exist. Parameters: p_session_id - session ID. Returns: void.';

@@ -127,7 +127,8 @@ Below is how the P0 interface is intended to be used once implemented.
 1) **Create a session and open a page**
 
 ```sql
--- A session creates state, history, and an event channel.
+-- A session creates state, history, and an event channel. URLs may include path,
+-- query (?foo=bar), and fragment (#section) components.
 SELECT pgb_session.open('pgb://local/demo_chat') AS session_id;
 -- → returns UUID
 ```
@@ -216,6 +217,17 @@ accessible as the `postgres` superuser). The script uses `pg_config` to locate
 `postgresql-server-dev-16` on Debian/Ubuntu) if `pg_config` is not available.
 Additional integration tests live in the same directory.
 
+## Error Codes
+
+The project defines custom `SQLSTATE` values. Keep this list up to date when
+introducing new codes.
+
+| Code   | Raised when |
+|--------|-------------|
+| `PGBUV` | A URL is empty or fails validation in `pgb_session.validate_url` and functions that call it. |
+| `PGBSN` | A session ID does not match an existing session (`pgb_session.navigate`, `pgb_session.reload`, `pgb_session.replay`, `pgb_session.close`). |
+| `PGBNS` | A snapshot for the requested session and timestamp cannot be found (`pgb_session.replay`). |
+
 ---
 
 ## Contributing
@@ -227,6 +239,7 @@ Additional integration tests live in the same directory.
   - example usage,
   - unit test (where applicable),
   - migration script.
+- Document new `SQLSTATE` codes in the **Error Codes** section of this README.
 
 ---
 

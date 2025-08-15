@@ -37,8 +37,8 @@ BEGIN
             USING ERRCODE = 'PGBUV';
     END IF;
 
-    -- Enforce lowercase scheme and basic host/path structure.
-    IF v_url !~ '^(pgb|https?)://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~!$&''()*+,;=:@%/-]*)?$' THEN
+    -- Enforce lowercase scheme and basic host/path structure, allowing optional query and fragment components.
+    IF v_url !~ '^(pgb|https?)://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~!$&''()*+,;=:@%/-]*)?(\?[A-Za-z0-9._~!$&''()*+,;=:@%/?-]*)?(#[A-Za-z0-9._~!$&''()*+,;=:@%/?-]*)?$' THEN
         RAISE EXCEPTION 'invalid URL: %', v_url
             USING ERRCODE = 'PGBUV';
     END IF;
@@ -47,7 +47,9 @@ BEGIN
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
-    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path. Returns the trimmed URL.';
+    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme
+with a valid host/path, optional query, and optional fragment. Returns the
+trimmed URL.';
 \ir 60_pgb_session_open.sql
 CREATE OR REPLACE FUNCTION pgb_session.open(p_url TEXT)
 RETURNS UUID
@@ -376,10 +378,36 @@ SELECT pgb_session.open('https://example.com') IS NOT NULL AS https_opened;
 
 -- Trim surrounding whitespace
 SELECT pgb_session.open(' http://example.com ') IS NOT NULL AS http_whitespace_opened;
- http_whitespace_opened 
+ http_whitespace_opened
 ------------------------
  t
 (1 row)
+
+-- Accept URLs with query and fragment components
+SELECT pgb_session.open('http://example.com/path?foo=bar') IS NOT NULL AS http_query_opened;
+ http_query_opened
+-------------------
+ t
+(1 row)
+
+SELECT pgb_session.open('http://example.com/path?foo=bar#frag') IS NOT NULL AS http_query_fragment_opened;
+ http_query_fragment_opened
+----------------------------
+ t
+(1 row)
+
+SELECT pgb_session.open('http://example.com/path#frag') IS NOT NULL AS http_fragment_opened;
+ http_fragment_opened
+---------------------
+ t
+(1 row)
+
+-- Reject malformed query/fragment URLs
+SELECT pgb_session.open('http://example.com/path#frag?bad');
+ERROR:  invalid URL: http://example.com/path#frag?bad
+CONTEXT:  PL/pgSQL function pgb_session.validate_url(text) line 12 at RAISE
+SQL statement "SELECT pgb_session.validate_url(p_url)"
+PL/pgSQL function pgb_session.open(text) line 6 at assignment
 
 -- Reject uppercase URL schemes
 SELECT pgb_session.open('HTTP://example.com');
