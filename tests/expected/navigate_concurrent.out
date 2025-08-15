@@ -53,6 +53,14 @@ FROM (
  {0,1,2}
 (1 row)
 
+-- Verify snapshots recorded for each navigation (plus initial)
+SELECT count(*) = 3 AS snapshot_count
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_count
+---------------
+ t
+(1 row)
+
 SELECT dblink_disconnect('c1');
  dblink_disconnect
 -------------------

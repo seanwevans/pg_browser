@@ -29,12 +29,12 @@ BEGIN
     END IF;
 
 
-    -- Snapshot current state and record timestamp
-    snap_ts := clock_timestamp();
-    INSERT INTO pgb_session.snapshot(session_id, ts, state, current_url)
-    SELECT sid, snap_ts, state, current_url
-    FROM pgb_session.session
-    WHERE id = sid;
+    -- Capture timestamp of the initial snapshot created by pgb_session.open
+    SELECT ts INTO snap_ts
+    FROM pgb_session.snapshot
+    WHERE session_id = sid
+    ORDER BY ts
+    LIMIT 1;
 
     -- Mutate session and history
     UPDATE pgb_session.session
@@ -80,6 +80,16 @@ BEGIN
         RAISE EXCEPTION 'history row missing after first navigate';
     END IF;
 
+    IF (
+        SELECT current_url
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts DESC
+        LIMIT 1
+    ) <> 'http://example.com' THEN
+        RAISE EXCEPTION 'snapshot missing after first navigate';
+    END IF;
+
     PERFORM pgb_session.navigate(sid, 'https://example.org');
     IF NOT EXISTS (
         SELECT 1 FROM pgb_session.session
@@ -92,6 +102,16 @@ BEGIN
         WHERE session_id = sid AND n = 4 AND url = 'https://example.org'
     ) THEN
         RAISE EXCEPTION 'history row missing after second navigate';
+    END IF;
+
+    IF (
+        SELECT current_url
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts DESC
+        LIMIT 1
+    ) <> 'https://example.org' THEN
+        RAISE EXCEPTION 'snapshot missing after second navigate';
     END IF;
 
     IF (
@@ -118,6 +138,18 @@ BEGIN
         WHERE s.id = sid AND h.n = 5 AND h.url = s.current_url
     ) THEN
         RAISE EXCEPTION 'reload did not update history correctly';
+    END IF;
+
+    IF (
+        SELECT current_url
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts DESC
+        LIMIT 1
+    ) <> (
+        SELECT current_url FROM pgb_session.session WHERE id = sid
+    ) THEN
+        RAISE EXCEPTION 'snapshot missing after reload';
     END IF;
 
 

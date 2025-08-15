@@ -95,10 +95,16 @@ BEGIN
 
     INSERT INTO pgb_session.history(session_id, url, ts)
     VALUES (p_session_id, p_url, clock_timestamp());
+
+    -- Record a snapshot after navigation to capture the new URL and state
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    SELECT id, state, current_url
+    FROM pgb_session.session
+    WHERE id = p_session_id;
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
-    'Navigate to a new URL. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
+    'Navigate to a new URL and record a snapshot. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
 \ir 60_pgb_session_reload.sql
 CREATE OR REPLACE FUNCTION pgb_session.reload(p_session_id UUID)
 RETURNS VOID
@@ -106,8 +112,9 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     v_url TEXT;
+    v_state JSONB;
 BEGIN
-    SELECT current_url INTO v_url
+    SELECT current_url, state INTO v_url, v_state
     FROM pgb_session.session
     WHERE id = p_session_id;
 
@@ -118,10 +125,14 @@ BEGIN
 
     INSERT INTO pgb_session.history(session_id, url, ts)
     VALUES (p_session_id, v_url, clock_timestamp());
+
+    -- Capture a snapshot of the session at reload time
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (p_session_id, v_state, v_url);
 END;
 $$;
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
-    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+    'Record a reload event and snapshot the session. Parameters: p_session_id - session ID. Returns: void.';
 CREATE OR REPLACE FUNCTION pgb_session.replay(p_session_id UUID, p_ts TIMESTAMPTZ)
 RETURNS VOID
 LANGUAGE plpgsql
@@ -235,9 +246,17 @@ SELECT count(*) AS session_count FROM pgb_session.session;
 
 -- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
- history_count 
+ history_count
 ---------------
              2
+(1 row)
+
+-- Verify snapshot recorded on reload
+SELECT count(*) = 2 AS snapshot_count_after_reload
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_count_after_reload
+----------------------------
+ t
 (1 row)
 
 -- Navigate to new URLs within the session
@@ -263,9 +282,25 @@ FROM pgb_session.session WHERE id = :'sid';
 
 -- Verify history table has four entries for the session
 SELECT count(*) AS history_count_after_nav FROM pgb_session.history WHERE session_id = :'sid';
- history_count_after_nav 
+ history_count_after_nav
 -------------------------
                        4
+(1 row)
+
+-- Verify snapshots recorded on navigations
+SELECT count(*) = 4 AS snapshot_count_after_nav
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+ snapshot_count_after_nav
+-------------------------
+ t
+(1 row)
+
+-- Verify latest snapshot matches current URL
+SELECT current_url = 'https://example.org' AS snapshot_latest_url
+FROM pgb_session.snapshot WHERE session_id = :'sid' ORDER BY ts DESC LIMIT 1;
+ snapshot_latest_url
+--------------------
+ t
 (1 row)
 
 -- Verify history numbering is sequential
