@@ -26,6 +26,10 @@ SELECT count(*) AS session_count FROM pgb_session.session;
 -- Verify history table has two entries
 SELECT count(*) AS history_count FROM pgb_session.history;
 
+-- Verify snapshot recorded on reload
+SELECT count(*) = 2 AS snapshot_count_after_reload
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+
 
 -- Navigate to new URLs within the session
 SELECT pgb_session.navigate(:'sid', 'http://example.com');
@@ -37,6 +41,14 @@ FROM pgb_session.session WHERE id = :'sid';
 
 -- Verify history table has four entries for the session
 SELECT count(*) AS history_count_after_nav FROM pgb_session.history WHERE session_id = :'sid';
+
+-- Verify snapshots recorded on navigations
+SELECT count(*) = 4 AS snapshot_count_after_nav
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+
+-- Verify latest snapshot matches current URL
+SELECT current_url = 'https://example.org' AS snapshot_latest_url
+FROM pgb_session.snapshot WHERE session_id = :'sid' ORDER BY ts DESC LIMIT 1;
 
 -- Verify history numbering is sequential
 SELECT (

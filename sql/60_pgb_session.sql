@@ -80,11 +80,17 @@ BEGIN
 
     INSERT INTO pgb_session.history(session_id, url, ts)
     VALUES (p_session_id, p_url, clock_timestamp());
+
+    -- Record a snapshot after navigation to capture the new URL and state
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    SELECT id, state, current_url
+    FROM pgb_session.session
+    WHERE id = p_session_id;
 END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.navigate(p_session_id UUID, p_url TEXT) IS
-    'Navigate to a new URL. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
+    'Navigate to a new URL and record a snapshot. Parameters: p_session_id - session ID; p_url - destination URL. Returns: void.';
 
 \ir 60_pgb_session_reload.sql
 

@@ -24,5 +24,9 @@ FROM (
     WHERE session_id = :'sid'
 ) s;
 
+-- Verify snapshots recorded for each reload (plus initial)
+SELECT count(*) = 3 AS snapshot_count
+FROM pgb_session.snapshot WHERE session_id = :'sid';
+
 SELECT dblink_disconnect('c1');
 SELECT dblink_disconnect('c2');

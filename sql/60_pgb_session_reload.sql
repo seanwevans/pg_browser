@@ -4,8 +4,9 @@ LANGUAGE plpgsql
 AS $$
 DECLARE
     v_url TEXT;
+    v_state JSONB;
 BEGIN
-    SELECT current_url INTO v_url
+    SELECT current_url, state INTO v_url, v_state
     FROM pgb_session.session
     WHERE id = p_session_id;
 
@@ -16,8 +17,12 @@ BEGIN
 
     INSERT INTO pgb_session.history(session_id, url, ts)
     VALUES (p_session_id, v_url, clock_timestamp());
+
+    -- Capture a snapshot of the session at reload time
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
+    VALUES (p_session_id, v_state, v_url);
 END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.reload(p_session_id UUID) IS
-    'Record a reload event. Parameters: p_session_id - session ID. Returns: void.';
+    'Record a reload event and snapshot the session. Parameters: p_session_id - session ID. Returns: void.';
