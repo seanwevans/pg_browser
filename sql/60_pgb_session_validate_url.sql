@@ -10,8 +10,8 @@ BEGIN
             USING ERRCODE = 'PGBUV';
     END IF;
 
-    -- Enforce lowercase scheme and basic host/path structure.
-    IF v_url !~ '^(pgb|https?)://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~!$&''()*+,;=:@%/-]*)?$' THEN
+    -- Enforce lowercase scheme and basic host/path structure, allowing optional query and fragment components.
+    IF v_url !~ '^(pgb|https?)://[A-Za-z0-9.-]+(:[0-9]+)?(/[A-Za-z0-9._~!$&''()*+,;=:@%/-]*)?(\?[A-Za-z0-9._~!$&''()*+,;=:@%/?-]*)?(#[A-Za-z0-9._~!$&''()*+,;=:@%/?-]*)?$' THEN
         RAISE EXCEPTION 'invalid URL: %', v_url
             USING ERRCODE = 'PGBUV';
     END IF;
@@ -21,5 +21,4 @@ END;
 $$;
 
 COMMENT ON FUNCTION pgb_session.validate_url(p_url TEXT) IS
-    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path. Raises SQLSTATE PGBUV if the URL is empty or invalid. Returns the trimmed URL.';
-
+    'Validate a URL ensuring it is not empty, trimmed, and uses an allowed scheme with a valid host/path, optional query, and optional fragment. Returns the trimmed URL.';

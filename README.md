@@ -127,7 +127,8 @@ Below is how the P0 interface is intended to be used once implemented.
 1) **Create a session and open a page**
 
 ```sql
--- A session creates state, history, and an event channel.
+-- A session creates state, history, and an event channel. URLs may include path,
+-- query (?foo=bar), and fragment (#section) components.
 SELECT pgb_session.open('pgb://local/demo_chat') AS session_id;
 -- → returns UUID
 ```
