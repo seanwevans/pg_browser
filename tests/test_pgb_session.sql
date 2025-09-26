@@ -8,6 +8,10 @@ DO $$
 DECLARE
     sid UUID;
     snap_ts TIMESTAMPTZ;
+    mutated_focus UUID;
+    nav_focus UUID;
+    nav_focus2 UUID;
+    reload_focus UUID;
 BEGIN
     sid := pgb_session.open('pgb://local/demo');
     IF sid IS NULL THEN
@@ -28,6 +32,16 @@ BEGIN
         RAISE EXCEPTION 'history row missing or incorrect';
     END IF;
 
+    IF (
+        SELECT focus
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts
+        LIMIT 1
+    ) IS NOT NULL THEN
+        RAISE EXCEPTION 'initial snapshot focus not null';
+    END IF;
+
 
     -- Capture timestamp of the initial snapshot created by pgb_session.open
     SELECT ts INTO snap_ts
@@ -37,8 +51,9 @@ BEGIN
     LIMIT 1;
 
     -- Mutate session and history
+    mutated_focus := gen_random_uuid();
     UPDATE pgb_session.session
-    SET current_url = 'pgb://local/other', state = '{"foo":"bar"}'
+    SET current_url = 'pgb://local/other', state = '{"foo":"bar"}', focus = mutated_focus
     WHERE id = sid;
     PERFORM pg_sleep(0.001);
     INSERT INTO pgb_session.history(session_id, url, ts)
@@ -53,6 +68,7 @@ BEGIN
         WHERE id = sid
           AND current_url = 'pgb://local/demo'
           AND state = '{}'::jsonb
+          AND focus IS NULL
     ) THEN
         RAISE EXCEPTION 'replay did not restore session';
     END IF;
@@ -64,12 +80,12 @@ BEGIN
     ) THEN
         RAISE EXCEPTION 'replay did not truncate history';
     END IF;
-
-
+    nav_focus := gen_random_uuid();
+    UPDATE pgb_session.session SET focus = nav_focus WHERE id = sid;
     PERFORM pgb_session.navigate(sid, 'http://example.com');
     IF NOT EXISTS (
         SELECT 1 FROM pgb_session.session
-        WHERE id = sid AND current_url = 'http://example.com'
+        WHERE id = sid AND current_url = 'http://example.com' AND focus = nav_focus
     ) THEN
         RAISE EXCEPTION 'navigate did not update current_url';
     END IF;
@@ -90,10 +106,22 @@ BEGIN
         RAISE EXCEPTION 'snapshot missing after first navigate';
     END IF;
 
+    IF (
+        SELECT focus
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts DESC
+        LIMIT 1
+    ) IS DISTINCT FROM nav_focus THEN
+        RAISE EXCEPTION 'snapshot focus mismatch after first navigate';
+    END IF;
+
+    nav_focus2 := gen_random_uuid();
+    UPDATE pgb_session.session SET focus = nav_focus2 WHERE id = sid;
     PERFORM pgb_session.navigate(sid, 'https://example.org');
     IF NOT EXISTS (
         SELECT 1 FROM pgb_session.session
-        WHERE id = sid AND current_url = 'https://example.org'
+        WHERE id = sid AND current_url = 'https://example.org' AND focus = nav_focus2
     ) THEN
         RAISE EXCEPTION 'navigate did not update current_url to second url';
     END IF;
@@ -115,6 +143,16 @@ BEGIN
     END IF;
 
     IF (
+        SELECT focus
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts DESC
+        LIMIT 1
+    ) IS DISTINCT FROM nav_focus2 THEN
+        RAISE EXCEPTION 'snapshot focus mismatch after second navigate';
+    END IF;
+
+    IF (
         SELECT n FROM pgb_session.history
         WHERE session_id = sid
         ORDER BY n DESC
@@ -124,7 +162,17 @@ BEGIN
     END IF;
 
 
+    reload_focus := gen_random_uuid();
+    UPDATE pgb_session.session SET focus = reload_focus WHERE id = sid;
     PERFORM pgb_session.reload(sid);
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pgb_session.session
+        WHERE id = sid AND focus = reload_focus
+    ) THEN
+        RAISE EXCEPTION 'reload did not preserve focus';
+    END IF;
 
     IF NOT EXISTS (
         SELECT 1
@@ -150,6 +198,16 @@ BEGIN
         SELECT current_url FROM pgb_session.session WHERE id = sid
     ) THEN
         RAISE EXCEPTION 'snapshot missing after reload';
+    END IF;
+
+    IF (
+        SELECT focus
+        FROM pgb_session.snapshot
+        WHERE session_id = sid
+        ORDER BY ts DESC
+        LIMIT 1
+    ) IS DISTINCT FROM reload_focus THEN
+        RAISE EXCEPTION 'snapshot focus mismatch after reload';
     END IF;
 
 
