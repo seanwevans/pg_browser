@@ -134,9 +134,20 @@ BEGIN
         current_url = v_url
     WHERE id = p_session_id;
 
+    -- Identify the latest history entry that should remain after replay.
     DELETE FROM pgb_session.history
     WHERE session_id = p_session_id
-      AND ts > v_snap_ts;
+      AND n > COALESCE((
+          SELECT h.n
+          FROM pgb_session.history h
+          WHERE h.session_id = p_session_id
+            AND (
+                h.ts < v_snap_ts
+                OR (h.ts = v_snap_ts AND h.url = v_url)
+            )
+          ORDER BY h.n DESC
+          LIMIT 1
+      ), 0);
 
     -- Remove snapshots taken after the target snapshot
     DELETE FROM pgb_session.snapshot
