@@ -9,7 +9,8 @@ DECLARE
 BEGIN
     SELECT current_url, state, focus INTO v_url, v_state, v_focus
     FROM pgb_session.session
-    WHERE id = p_session_id;
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
