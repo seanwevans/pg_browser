@@ -28,5 +28,26 @@ FROM (
 SELECT count(*) = 3 AS snapshot_count
 FROM pgb_session.snapshot WHERE session_id = :'sid';
 
+-- Simulate a navigation in progress and ensure reload waits for it
+SELECT dblink_exec('c1', 'BEGIN');
+SELECT dblink_exec('c1', format(
+    'SELECT pgb_session.navigate(''%s'', ''pgb://local/concurrent'')',
+    :'sid'
+));
+
+SELECT dblink_send_query('c2', format('SELECT pgb_session.reload(''%s'')', :'sid'));
+
+SELECT dblink_is_busy('c2') AS reload_waiting;
+
+SELECT dblink_exec('c1', 'COMMIT');
+
+SELECT * FROM dblink_get_result('c2') AS t(result text);
+
+SELECT url = 'pgb://local/concurrent' AS reload_used_committed_url
+FROM pgb_session.history
+WHERE session_id = :'sid'
+ORDER BY n DESC
+LIMIT 1;
+
 SELECT dblink_disconnect('c1');
 SELECT dblink_disconnect('c2');

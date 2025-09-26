@@ -5,10 +5,13 @@ AS $$
 DECLARE
     v_url TEXT;
     v_state JSONB;
+    v_focus UUID;
 BEGIN
-    SELECT current_url, state INTO v_url, v_state
+    SELECT current_url, state, focus
+    INTO v_url, v_state, v_focus
     FROM pgb_session.session
-    WHERE id = p_session_id;
+    WHERE id = p_session_id
+    FOR UPDATE;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'session % not found', p_session_id
