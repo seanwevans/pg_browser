@@ -45,6 +45,7 @@ CREATE TABLE IF NOT EXISTS pgb_session.snapshot (
     ts TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
     state JSONB NOT NULL,
     current_url TEXT NOT NULL,
+    focus UUID,
     PRIMARY KEY(session_id, ts)
 );
 
@@ -58,6 +59,8 @@ COMMENT ON COLUMN pgb_session.snapshot.state IS
     'Session state captured at the snapshot time.';
 COMMENT ON COLUMN pgb_session.snapshot.current_url IS
     'URL that was current when the snapshot was taken.';
+COMMENT ON COLUMN pgb_session.snapshot.focus IS
+    'Identifier of the currently focused element, if any.';
 
 \ir 60_pgb_session_validate_url.sql
 \ir 60_pgb_session_open.sql
@@ -82,8 +85,8 @@ BEGIN
     VALUES (p_session_id, p_url, clock_timestamp());
 
     -- Record a snapshot after navigation to capture the new URL and state
-    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
-    SELECT id, state, current_url
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url, focus)
+    SELECT id, state, current_url, focus
     FROM pgb_session.session
     WHERE id = p_session_id;
 END;
@@ -102,6 +105,7 @@ AS $$
 DECLARE
     v_state JSONB;
     v_url TEXT;
+    v_focus UUID;
     v_snap_ts TIMESTAMPTZ;
 BEGIN
     -- Acquire a lock on the session row to ensure consistency for
@@ -116,8 +120,8 @@ BEGIN
             USING ERRCODE = 'PGBSN';
     END IF;
 
-    SELECT state, current_url, ts
-    INTO v_state, v_url, v_snap_ts
+    SELECT state, current_url, focus, ts
+    INTO v_state, v_url, v_focus, v_snap_ts
     FROM pgb_session.snapshot
     WHERE session_id = p_session_id
       AND ts <= p_ts
@@ -131,7 +135,8 @@ BEGIN
 
     UPDATE pgb_session.session
     SET state = v_state,
-        current_url = v_url
+        current_url = v_url,
+        focus = v_focus
     WHERE id = p_session_id;
 
     DELETE FROM pgb_session.history
@@ -144,8 +149,8 @@ BEGIN
       AND ts > v_snap_ts;
 
     -- Record a new snapshot of the restored state
-    INSERT INTO pgb_session.snapshot(session_id, state, current_url)
-    VALUES (p_session_id, v_state, v_url);
+    INSERT INTO pgb_session.snapshot(session_id, state, current_url, focus)
+    VALUES (p_session_id, v_state, v_url, v_focus);
 END;
 $$;
 
