@@ -203,6 +203,51 @@ BEGIN
 
     END;
 
+    DECLARE
+        sid3 UUID;
+        snap_ts_dup TIMESTAMPTZ;
+    BEGIN
+
+        sid3 := pgb_session.open('pgb://local/dup');
+
+        SELECT ts INTO snap_ts_dup
+        FROM pgb_session.snapshot
+        WHERE session_id = sid3
+        ORDER BY ts DESC
+        LIMIT 1;
+
+        -- Generate additional history entries after the snapshot.
+        PERFORM pgb_session.navigate(sid3, 'pgb://local/dup-a');
+        PERFORM pgb_session.navigate(sid3, 'pgb://local/dup-b');
+
+        -- Force the newer history rows to share the same timestamp as the snapshot.
+        UPDATE pgb_session.history
+        SET ts = snap_ts_dup
+        WHERE session_id = sid3
+          AND n > 1;
+
+        PERFORM pgb_session.replay(sid3, snap_ts_dup);
+
+        IF NOT EXISTS (
+            SELECT 1 FROM pgb_session.session
+            WHERE id = sid3
+              AND current_url = 'pgb://local/dup'
+              AND state = '{}'::jsonb
+        ) THEN
+            RAISE EXCEPTION 'replay with duplicate timestamps did not restore session';
+        END IF;
+
+        IF EXISTS (
+            SELECT 1 FROM pgb_session.history
+            WHERE session_id = sid3 AND n > 1
+        ) THEN
+            RAISE EXCEPTION 'replay with duplicate timestamps did not truncate history';
+        END IF;
+
+        PERFORM pgb_session.close(sid3);
+
+    END;
+
     PERFORM pgb_session.close(sid);
 
     IF EXISTS (
