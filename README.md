@@ -1,4 +1,5 @@
 # pg_browser
+<img width="256" alt="no thanks just browing" src="https://github.com/user-attachments/assets/cac66346-28c0-46c5-8798-8f1c50829161" />
 
 *A tiny, database-native browser engine built entirely in PostgreSQL (schemas, tables, stored procedures, and extensions).*
 
