@@ -28,8 +28,20 @@ SELECT dblink_send_query('c2', format('SELECT pgb_session.reload(''%s'')', :'sid
                  1
 (1 row)
 
--- Wait for both reloads to complete
+-- Wait for both reloads to complete, then drain each connection with a second
+-- dblink_get_result so it returns to an idle state and can be reused below.
 SELECT * FROM dblink_get_result('c1') AS t(result text);
+ result 
+--------
+ 
+(1 row)
+
+SELECT * FROM dblink_get_result('c1') AS t(result text);
+ result 
+--------
+(0 rows)
+
+SELECT * FROM dblink_get_result('c2') AS t(result text);
  result 
 --------
  
@@ -38,8 +50,7 @@ SELECT * FROM dblink_get_result('c1') AS t(result text);
 SELECT * FROM dblink_get_result('c2') AS t(result text);
  result 
 --------
- 
-(1 row)
+(0 rows)
 
 -- Verify history sequence numbers are unique and sequential
 SELECT array_agg(n - min_n ORDER BY n) AS ns
@@ -48,7 +59,7 @@ FROM (
     FROM pgb_session.history
     WHERE session_id = :'sid'
 ) s;
-   ns
+   ns    
 ---------
  {0,1,2}
 (1 row)
@@ -56,14 +67,14 @@ FROM (
 -- Verify snapshots recorded for each reload (plus initial)
 SELECT count(*) = 3 AS snapshot_count
 FROM pgb_session.snapshot WHERE session_id = :'sid';
- snapshot_count
----------------
+ snapshot_count 
+----------------
  t
 (1 row)
 
 -- Simulate a navigation in progress and ensure reload waits for it
 SELECT dblink_exec('c1', 'BEGIN');
- dblink_exec
+ dblink_exec 
 -------------
  BEGIN
 (1 row)
@@ -72,33 +83,29 @@ SELECT dblink_exec('c1', format(
     'SELECT pgb_session.navigate(''%s'', ''pgb://local/concurrent'')',
     :'sid'
 ));
-      dblink_exec
-----------------------
- SELECT 1
-(1 row)
-
+ERROR:  statement returning results not allowed
 SELECT dblink_send_query('c2', format('SELECT pgb_session.reload(''%s'')', :'sid'));
- dblink_send_query
+ dblink_send_query 
 -------------------
                  1
 (1 row)
 
 SELECT dblink_is_busy('c2') AS reload_waiting;
- reload_waiting
+ reload_waiting 
 ----------------
- t
+              1
 (1 row)
 
 SELECT dblink_exec('c1', 'COMMIT');
- dblink_exec
+ dblink_exec 
 -------------
  COMMIT
 (1 row)
 
 SELECT * FROM dblink_get_result('c2') AS t(result text);
- result
+ result 
 --------
-
+ 
 (1 row)
 
 SELECT url = 'pgb://local/concurrent' AS reload_used_committed_url
@@ -106,13 +113,13 @@ FROM pgb_session.history
 WHERE session_id = :'sid'
 ORDER BY n DESC
 LIMIT 1;
- reload_used_committed_url
+ reload_used_committed_url 
 ---------------------------
  t
 (1 row)
 
 SELECT dblink_disconnect('c1');
- dblink_disconnect
+ dblink_disconnect 
 -------------------
  OK
 (1 row)

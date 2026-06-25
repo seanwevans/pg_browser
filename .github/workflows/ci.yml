@@ -5,45 +5,70 @@ name: CI
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: pg_browser_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+    strategy:
+      fail-fast: false
+      matrix:
+        pg: ['16', '17']
+    env:
+      PGHOST: localhost
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
     steps:
       - uses: actions/checkout@v4
-      - name: Install psql client
+
+      - name: Install PostgreSQL ${{ matrix.pg }}
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client
-      - name: Run schema scripts
-        env:
-          PGPASSWORD: postgres
+          sudo apt-get install -y curl ca-certificates lsb-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          curl -fsSL https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+            | sudo tee /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc >/dev/null
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc]" \
+            "https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list >/dev/null
+          sudo apt-get update
+          sudo apt-get install -y \
+            "postgresql-${{ matrix.pg }}" \
+            "postgresql-client-${{ matrix.pg }}" \
+            "postgresql-server-dev-${{ matrix.pg }}"
+
+      - name: Start a single cluster on port 5432
         run: |
-          for file in sql/00_install.sql sql/60_pgb_session.sql; do
-            psql -h localhost -U postgres -d pg_browser_test -f "$file"
+          # Drop any pre-existing clusters so the target version owns 5432.
+          # dblink (used by the concurrent tests) connects back over the default
+          # socket on 5432, so the cluster must listen there.
+          sudo systemctl stop postgresql || true
+          pg_lsclusters -h | awk '{print $1, $2}' | while read -r ver name; do
+            sudo pg_dropcluster --stop "$ver" "$name" || true
           done
-      - name: Run tests
-        env:
-          PGPASSWORD: postgres
+          sudo pg_createcluster "${{ matrix.pg }}" main -- \
+            --auth-local=peer --auth-host=scram-sha-256
+          sudo pg_ctlcluster "${{ matrix.pg }}" main start
+          for _ in $(seq 1 30); do
+            pg_isready -h /var/run/postgresql -p 5432 && break
+            sleep 1
+          done
+          sudo -u postgres psql -p 5432 \
+            -c "ALTER USER postgres PASSWORD 'postgres';"
+
+      - name: Golden suite (pg_regress, fresh install)
         run: |
-          set +e
+          export PATH="/usr/lib/postgresql/${{ matrix.pg }}/bin:$PATH"
+          tests/run_regress.sh
+
+      - name: Transactional + integration tests
+        run: |
+          export PATH="/usr/lib/postgresql/${{ matrix.pg }}/bin:$PATH"
           tests/run.sh
-          status=$?
-          if [ "$status" -ne 0 ]; then
-            echo "Tests failed with exit status $status"
-            exit $status
-          fi
+          tests/test_session_open.sh
+
+      - name: Migration-order check (every sql file in sequence)
+        run: |
+          export PATH="/usr/lib/postgresql/${{ matrix.pg }}/bin:$PATH"
+          tests/run_migrations.sh

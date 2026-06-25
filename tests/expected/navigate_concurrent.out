@@ -1,44 +1,45 @@
 -- Test concurrent navigations to ensure unique history entries
 CREATE EXTENSION IF NOT EXISTS dblink;
+NOTICE:  extension "dblink" already exists, skipping
 -- Open a new session and capture the ID
 SELECT pgb_session.open('pgb://local/demo') AS sid \gset
 -- Establish two connections for concurrent navigations
 SELECT dblink_connect('c1', 'dbname=' || current_database());
- dblink_connect
+ dblink_connect 
 ----------------
  OK
 (1 row)
 
 SELECT dblink_connect('c2', 'dbname=' || current_database());
- dblink_connect
+ dblink_connect 
 ----------------
  OK
 (1 row)
 
 -- Launch navigations concurrently
 SELECT dblink_send_query('c1', format('SELECT pgb_session.navigate(''%s'', ''http://example.com/a'')', :'sid'));
- dblink_send_query
+ dblink_send_query 
 -------------------
                  1
 (1 row)
 
 SELECT dblink_send_query('c2', format('SELECT pgb_session.navigate(''%s'', ''http://example.com/b'')', :'sid'));
- dblink_send_query
+ dblink_send_query 
 -------------------
                  1
 (1 row)
 
 -- Wait for both navigations to complete
 SELECT * FROM dblink_get_result('c1') AS t(result text);
- result
+ result 
 --------
-
+ 
 (1 row)
 
 SELECT * FROM dblink_get_result('c2') AS t(result text);
- result
+ result 
 --------
-
+ 
 (1 row)
 
 -- Verify history sequence numbers are unique and sequential
@@ -48,7 +49,7 @@ FROM (
     FROM pgb_session.history
     WHERE session_id = :'sid'
 ) s;
-   ns
+   ns    
 ---------
  {0,1,2}
 (1 row)
@@ -56,19 +57,20 @@ FROM (
 -- Verify snapshots recorded for each navigation (plus initial)
 SELECT count(*) = 3 AS snapshot_count
 FROM pgb_session.snapshot WHERE session_id = :'sid';
- snapshot_count
----------------
+ snapshot_count 
+----------------
  t
 (1 row)
 
 SELECT dblink_disconnect('c1');
- dblink_disconnect
+ dblink_disconnect 
 -------------------
  OK
 (1 row)
 
 SELECT dblink_disconnect('c2');
- dblink_disconnect
+ dblink_disconnect 
 -------------------
  OK
 (1 row)
+

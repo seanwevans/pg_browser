@@ -1,0 +1,12 @@
+# Sequential pg_regress schedule for pg_browser.
+#
+# `session` installs the schema (sql/00_install.sql + sql/60_pgb_session.sql)
+# into the regression database; the later tests reuse it, so the tests must run
+# in order rather than in pg_regress's default parallel group.
+test: session
+test: reload_invalid
+test: reload_concurrent
+test: navigate_concurrent
+test: replay
+test: replay_missing_snapshot
+test: replay_invalid

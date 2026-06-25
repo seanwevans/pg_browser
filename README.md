@@ -84,19 +84,22 @@
 
 ---
 
-## Install (planned)
+## Install
 
-When the schemas are published:
+The `pgb_session` module is the only part implemented so far. A fresh install
+needs the core dependencies plus `pgb_session`:
 
 ```bash
 psql -d yourdb -f sql/00_install.sql
-psql -d yourdb -f sql/10_pgb_net.sql
-psql -d yourdb -f sql/20_pgb_dom.sql
-psql -d yourdb -f sql/30_pgb_layout.sql
-psql -d yourdb -f sql/40_pgb_view.sql
-psql -d yourdb -f sql/50_pgb_events.sql
 psql -d yourdb -f sql/60_pgb_session.sql
 ```
+
+`sql/60_pgb_session.sql` pulls in its helper definitions
+(`sql/60_pgb_session_*.sql`) via `\ir`, so keep those files alongside it.
+
+The remaining P0 modules from the [roadmap](ROADMAP.md) — `pgb_net`, `pgb_dom`,
+`pgb_layout`, `pgb_view`, and `pgb_events` — are not implemented yet; their
+install steps will be added here as they land.
 
 Optional:
 
@@ -107,17 +110,28 @@ CREATE EXTENSION IF NOT EXISTS http;
 
 ### Upgrade
 
-For installations created before the `pgb_session.history.n` column used
-`BIGINT`, run the upgrade script:
+Databases created with an earlier `sql/60_pgb_session.sql` are brought up to date
+by running the numbered migrations in order. They are idempotent, so re-running
+them (or running them against a fresh install) is safe:
 
 ```bash
+psql -d yourdb -f sql/61_add_session_current_url_check.sql
 psql -d yourdb -f sql/61_pgb_session_history_bigint.sql
+psql -d yourdb -f sql/62_history_ts_clock.sql
+psql -d yourdb -f sql/63_session_snapshot_clock.sql
+psql -d yourdb -f sql/64_session_snapshot_focus.sql
+psql -d yourdb -f sql/64_session_snapshot_identity.sql
+psql -d yourdb -f sql/65_session_per_session_n.sql
 ```
 
-This script redefines `pgb_session.reload` by including
-`sql/60_pgb_session_reload.sql`, keeping the function's definition in one
-place. Modify `sql/60_pgb_session_reload.sql` if the function body needs to
-change.
+`sql/65_session_per_session_n.sql` converts `pgb_session.history.n` and
+`pgb_session.snapshot.n` from a global identity sequence to **per-session**
+sequential numbering (renumbering existing rows by timestamp), makes
+`(session_id, n)` the snapshot primary key, and installs the
+`pgb_session.assign_sequence_n` trigger. After it runs, an upgraded database has
+the same schema as a fresh install. The migrations re-include the affected
+function definitions (`sql/60_pgb_session_*.sql`) via `\ir`, keeping each
+function defined in one place.
 
 ---
 
@@ -187,36 +201,59 @@ SELECT * FROM pgb_view.render_ascii(:session_id);
 
 ---
 
-## Project Structure (planned)
+## Project Structure
+
+Implemented today:
 
 ```
 sql/
-  00_install.sql
-  10_pgb_net.sql
-  20_pgb_parse.sql
-  20_pgb_dom.sql
-  30_pgb_layout.sql
-  40_pgb_view.sql
-  50_pgb_events.sql
-  60_pgb_session.sql
-  90_devtools.sql
+  00_install.sql                       -- required extensions (pgcrypto)
+  60_pgb_session.sql                   -- pgb_session schema, tables, triggers
+  60_pgb_session_assign_sequence_n.sql -- per-session `n` trigger
+  60_pgb_session_validate_url.sql      -- validate_url()
+  60_pgb_session_open.sql              -- open()
+  60_pgb_session_reload.sql            -- reload()
+  60_pgb_session_replay.sql            -- replay()
+  61_*.sql … 65_*.sql                  -- ordered, idempotent upgrade migrations
+tests/                                 -- pg_regress suite + integration scripts
+ROADMAP.md
+```
+
+Planned (see [ROADMAP.md](ROADMAP.md)):
+
+```
+sql/
+  10_pgb_net.sql      -- local pgb:// routing, networking
+  20_pgb_dom.sql      -- PG-UI JSON ingestion
+  30_pgb_layout.sql   -- vbox/hbox layout
+  40_pgb_view.sql     -- render_ascii()
+  50_pgb_events.sql   -- input()/click() dispatcher
+  90_devtools.sql     -- dev views
 examples/
   demo_chat.pgui.json
-docs/
-  README.md
-  ROADMAP.md
 ```
 
 ---
 
 ## Testing
 
-A minimal regression harness lives under `tests/`. Run `tests/run_regress.sh` to
-execute the pg_regress test suite (requires a local PostgreSQL server
-accessible as the `postgres` superuser). The script uses `pg_config` to locate
-`pg_regress`; install the PostgreSQL development package (e.g.,
-`postgresql-server-dev-16` on Debian/Ubuntu) if `pg_config` is not available.
-Additional integration tests live in the same directory.
+A regression harness lives under `tests/`. All scripts read standard libpq
+environment variables (`PGHOST`, `PGPORT`, `PGUSER`, `PGPASSWORD`).
+
+- `tests/run_regress.sh` runs the golden `pg_regress` suite using the sequential
+  `tests/regress_schedule`. It locates `pg_regress` via `pg_config`, so install
+  the PostgreSQL development package (e.g. `postgresql-server-dev-16` on
+  Debian/Ubuntu). The server must also be reachable over a local Unix socket on
+  the default port, because the concurrency tests use `dblink` to open extra
+  connections back to it.
+- `tests/run.sh` runs the transactional `tests/test_pgb_session.sql` checks.
+- `tests/test_session_open.sh` is an end-to-end integration test (it creates and
+  drops a throwaway database).
+- `tests/run_migrations.sh` applies every `sql/*.sql` file in order against a
+  throwaway database to verify the install + migration chain runs cleanly and
+  converges with a fresh install.
+
+CI (`.github/workflows/ci.yml`) runs all four against PostgreSQL 16 and 17.
 
 ## Error Codes
 
