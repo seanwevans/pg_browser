@@ -12,8 +12,11 @@ SELECT dblink_connect('c2', 'dbname=' || current_database());
 SELECT dblink_send_query('c1', format('SELECT pgb_session.reload(''%s'')', :'sid'));
 SELECT dblink_send_query('c2', format('SELECT pgb_session.reload(''%s'')', :'sid'));
 
--- Wait for both reloads to complete
+-- Wait for both reloads to complete, then drain each connection with a second
+-- dblink_get_result so it returns to an idle state and can be reused below.
 SELECT * FROM dblink_get_result('c1') AS t(result text);
+SELECT * FROM dblink_get_result('c1') AS t(result text);
+SELECT * FROM dblink_get_result('c2') AS t(result text);
 SELECT * FROM dblink_get_result('c2') AS t(result text);
 
 -- Verify history sequence numbers are unique and sequential

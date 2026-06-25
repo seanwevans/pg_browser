@@ -102,8 +102,8 @@ SELECT pgb_session.open('http://example.com/path?foo=bar') IS NOT NULL AS http_q
 SELECT pgb_session.open('http://example.com/path?foo=bar#frag') IS NOT NULL AS http_query_fragment_opened;
 SELECT pgb_session.open('http://example.com/path#frag') IS NOT NULL AS http_fragment_opened;
 
--- Reject malformed query/fragment URLs
-SELECT pgb_session.open('http://example.com/path#frag?bad');
+-- Accept '?' within a fragment (fragments may contain query-like characters)
+SELECT pgb_session.open('http://example.com/path#frag?bad') IS NOT NULL AS http_fragment_query_opened;
 
 -- Reject uppercase URL schemes
 SELECT pgb_session.open('HTTP://example.com');
